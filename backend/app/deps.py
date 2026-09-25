@@ -1,0 +1,11 @@
+"""FastAPI-зависимости, общие для роутеров."""
+
+from .db import SessionLocal
+
+
+def get_session():
+    session = SessionLocal()
+    try:
+        yield session
+    finally:
+        session.close()

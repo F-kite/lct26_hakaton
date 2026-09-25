@@ -1,0 +1,58 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: signals
+      POSTGRES_PASSWORD: signals
+      POSTGRES_DB: signals
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U signals"]
+      interval: 5s
+      retries: 10
+  
+  adminer:
+    image: adminer
+    ports:
+      - "8080:8080"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  collector:
+    build: .
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql+psycopg://signals:signals@db:5432/signals
+    # локальный/докеровский резолвер этого окружения не видит hai.stanford.edu
+    # (NXDOMAIN), хотя домен реально существует (проверено через 1.1.1.1
+    # напрямую) — явно задаём публичные DNS, чтобы не зависеть от этого
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
+    command: >
+      sh -c "python -m collector.main init &&
+             python -m collector.main loop --interval 1800"
+    restart: unless-stopped
+
+  backend:
+    build: ../backend
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql+psycopg://signals:signals@db:5432/signals
+    ports:
+      # 8000 на хосте попадает в зарезервированный Windows диапазон портов
+      # (netsh int ipv4 show excludedportrange, 7919-8018) — снаружи 9000,
+      # внутри контейнера uvicorn по-прежнему слушает 8000
+      - "9000:8000"
+    restart: unless-stopped
+
+volumes:
+  pgdata:

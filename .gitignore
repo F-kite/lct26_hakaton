@@ -1,0 +1,26 @@
+# секреты — реальные ключи/токены, никогда не коммитить
+*.pem
+*.key
+kaggle.json
+
+# Python
+venv
+__pycache__
+*.pyc
+.pytest_cache
+*.egg-info/
+
+# frontend (когда появится)
+node_modules/
+
+# скачанные/сгенерированные датасеты — воспроизводимы скриптами
+# (getDataset/prepare_arxiv.py), не источник истины, ~5 ГБ
+getDataset/data/
+
+# IDE / ОС
+.vscode/
+.idea/
+.claude/
+.DS_Store
+Thumbs.db
+desktop.ini

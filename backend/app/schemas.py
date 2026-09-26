@@ -28,8 +28,11 @@ class SignalSourceOut(BaseModel):
     url: str
     source_key: str
     source_name: str
+    source_type: str
     trust_level: str
+    language: str
     published_at: datetime | None
+    is_primary: bool
 
 
 class SignalOut(BaseModel):
@@ -47,6 +50,7 @@ class SignalOut(BaseModel):
     mention_trend: str | None
     score: float
     is_mainstream: bool
+    status: str  # included | excluded — вкладка "Слабые сигналы"/"Исключённые"
     explanation: dict
     model_version: str
     created_at: datetime
@@ -57,8 +61,10 @@ class SearchStatusResponse(BaseModel):
     query_id: int
     query_text: str
     status: str
+    phase: str | None  # collecting|scoring|ranking|done — шаги модалки прогресса
     sources_processed: int
     candidates_found: int
     signals_above_75: int
     error: str | None
     results: list[SignalOut] | None = None
+    excluded: list[SignalOut] | None = None

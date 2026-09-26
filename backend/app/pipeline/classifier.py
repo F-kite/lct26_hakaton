@@ -124,7 +124,52 @@ class TrainedModelClassifier:
                 f"модель не содержит ожидаемый класс {LABEL_WEAK_SIGNAL!r}, "
                 f"реальные классы: {self._classes}"
             )
+        self._vectorizer, self._clf = self._find_steps()
         log.info("модель загружена: %s, классы: %s", model_path, self._classes)
+
+    def _find_steps(self):
+        """Найти TF-IDF векторизатор и классификатор внутри pipeline по
+        сигнатуре, а не по жёстко зашитым именам шагов — устойчивее к тому,
+        как именно аналитик назвал шаги при обучении."""
+        vectorizer = clf = None
+        for _, step in self._model.steps:
+            if hasattr(step, "get_feature_names_out"):
+                vectorizer = step
+            if hasattr(step, "coef_"):
+                clf = step
+        if vectorizer is None or clf is None:
+            raise ValueError(
+                "не удалось найти TF-IDF векторизатор и/или классификатор "
+                "внутри загруженного pipeline"
+            )
+        return vectorizer, clf
+
+    def vectorize(self, texts: list[str]):
+        """TF-IDF векторы уже обученного векторизатора — переиспользуется
+        display_grouping.py для похожести кандидатов (не для скоринга)."""
+        return self._vectorizer.transform(texts)
+
+    def explain_features(self, text: str, predicted_class: str, top_k: int = 4) -> list[str]:
+        """Топ-K термов текста, сильнее всего повлиявших на предсказанный
+        класс — настоящая word-level интерпретируемость (ТЗ раздел 2:
+        "показывать, по каким признакам..."; критерий 8.3), не хардкод
+        категорий: вес = коэффициент LogisticRegression для класса × вес
+        TF-IDF терма в КОНКРЕТНОМ тексте, берём только термы, реально
+        присутствующие в тексте (ненулевой вклад)."""
+        try:
+            class_idx = list(self._clf.classes_).index(predicted_class)
+        except ValueError:
+            return []
+
+        x = self._vectorizer.transform([text])
+        coef = self._clf.coef_[class_idx if self._clf.coef_.shape[0] > 1 else 0]
+        contributions = x.multiply(coef).toarray()[0]
+        if not contributions.any():
+            return []
+
+        feature_names = self._vectorizer.get_feature_names_out()
+        top_indices = contributions.argsort()[::-1][:top_k]
+        return [str(feature_names[i]) for i in top_indices if contributions[i] > 0]
 
     def score(self, candidate: SignalCandidate) -> ScoringResult:
         text = _clean_model_input(candidate)
@@ -157,6 +202,7 @@ class TrainedModelClassifier:
             explanation={
                 "predicted_class": predicted,
                 "class_probabilities": {k: round(float(v), 3) for k, v in by_class.items()},
+                "key_predictors": self.explain_features(text, predicted),
                 "rationale": (
                     f"Обученная модель (TF-IDF + LogisticRegression): класс {predicted!r}, "
                     f"P({LABEL_WEAK_SIGNAL})={by_class.get(LABEL_WEAK_SIGNAL, 0.0):.2f}."

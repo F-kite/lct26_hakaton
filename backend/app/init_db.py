@@ -17,6 +17,9 @@ from .db import Base, engine
 # (таблица, колонка, тип) — то, что появилось после первого create_all
 _EXTRA_COLUMNS = [
     ("signals", "potential_advantage", "TEXT"),
+    ("signals", "status", "VARCHAR(16) DEFAULT 'included'"),
+    ("search_queries", "phase", "VARCHAR(32)"),
+    ("signal_sources", "is_primary", "BOOLEAN DEFAULT FALSE"),
 ]
 
 

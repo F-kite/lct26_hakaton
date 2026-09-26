@@ -2,9 +2,11 @@
 не хватало для «в реальном времени, не ограничиваясь датасетом» из ТЗ.
 
 Раньше (candidates.py) поиск смотрел только в уже накопленную БД. Здесь —
-пять источников, которые умеют искать по произвольному запросу «на лету»:
-arXiv, Semantic Scholar, Crossref (уже были клиенты, только для другого —
-см. ниже), USPTO ODP, EPO OPS (патенты, новые).
+источники, которые умеют искать по произвольному запросу «на лету»:
+arXiv, Semantic Scholar, Crossref, OpenAlex (академические/патентные),
+GitHub, Hacker News, Reddit (не-академические сигналы — ранний рост
+активности вокруг темы, а не публикации), плюс USPTO ODP/EPO ODP/
+PatentsView для патентов.
 
 По решению: код здесь ДУБЛИРУЕТ часть логики RSS-collector/academic.py
 (arXiv, Semantic Scholar, Crossref) — сознательно, чтобы backend не зависел
@@ -14,12 +16,18 @@ Source/FeedItem в db.py).
 Статус проверки каждого клиента:
 - arXiv, Semantic Scholar, Crossref — проверены вручную на реальных
   запросах (тот же способ, что и в RSS-collector).
-- USPTO ODP, EPO OPS — ключей нет ни у кого в команде. Написаны по
+- OpenAlex, GitHub, Hacker News, Reddit — написаны по документации
+  публичных keyless-эндпоинтов, БЕЗ проверки вживую (нет доступа для
+  ручного теста на момент написания) — сверить с реальным ответом API
+  при первом реальном запуске.
+- USPTO ODP, EPO OPS, PatentsView — ключей нет ни у кого в команде (или
+  не будут получены — решение по проекту для USPTO/EPO). Написаны по
   документации, БЕЗ проверки вживую. Если что-то в структуре запроса или
   пути эндпоинта успело измениться — не полагаться на них не глядя, сверить
   с официальной документацией в момент получения ключа:
-    USPTO ODP: https://data.uspto.gov/apis
-    EPO OPS:   https://www.epo.org/en/searching-for-patents/data/web-services/ops
+    USPTO ODP:   https://data.uspto.gov/apis
+    EPO OPS:     https://www.epo.org/en/searching-for-patents/data/web-services/ops
+    PatentsView: https://search.patentsview.org/docs/
 
 Найденное сохраняется в ту же таблицу feed_items, что заполняет
 RSS-collector (обогащение БД, а не разовый ответ на один запрос) —
@@ -31,7 +39,9 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import json
 import logging
+import re
 import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -44,7 +54,13 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ..config import (
-    CONTACT_EMAIL, EPO_OPS_KEY, EPO_OPS_SECRET, SEMANTIC_SCHOLAR_API_KEY, USPTO_ODP_API_KEY,
+    CONTACT_EMAIL,
+    EPO_OPS_KEY,
+    EPO_OPS_SECRET,
+    GITHUB_TOKEN,
+    PATENTSVIEW_API_KEY,
+    SEMANTIC_SCHOLAR_API_KEY,
+    USPTO_ODP_API_KEY,
 )
 from ..db import FeedItem, Source
 
@@ -246,6 +262,272 @@ def search_crossref_live(client: httpx.Client, query: str, *, rows: int = 20) ->
 
 
 # --------------------------------------------------------------------------
+# OpenAlex — НЕ ПРОВЕРЕНО ВЖИВУЮ. Ключ не нужен вообще (mailto= в query —
+# тот же принцип вежливого пула, что уже используется для arXiv/Crossref
+# через User-Agent). Огромное покрытие (~250М+ работ) — реальная замена
+# главному узкому месту "мало платформ реально отвечают".
+# --------------------------------------------------------------------------
+
+OPENALEX_API = "https://api.openalex.org/works"
+
+
+def _reconstruct_openalex_abstract(inverted_index: dict[str, list[int]] | None) -> str | None:
+    """OpenAlex не отдаёт abstract текстом (авторское право) — только
+    inverted index: слово -> список позиций в тексте. Собираем обратно."""
+    if not inverted_index:
+        return None
+    positions: dict[int, str] = {}
+    for word, idxs in inverted_index.items():
+        for i in idxs:
+            positions[i] = word
+    if not positions:
+        return None
+    return " ".join(positions[i] for i in sorted(positions))
+
+
+def fetch_openalex_live(client: httpx.Client, query: str, *, per_page: int = 25) -> list[LiveItem]:
+    params = {"search": query, "per-page": str(per_page), "mailto": CONTACT_EMAIL}
+    resp = _get(client, f"{OPENALEX_API}?{urlencode(params)}")
+    if resp is None or resp.status_code != 200:
+        return []
+
+    try:
+        data = resp.json()
+    except ValueError:
+        log.error("openalex: не удалось разобрать ответ как JSON")
+        return []
+
+    items = []
+    for work in data.get("results", []):
+        title = work.get("title") or work.get("display_name")
+        if not title:
+            continue
+        url = work.get("doi") or (work.get("primary_location") or {}).get("landing_page_url") or work.get("id")
+        if not url:
+            continue
+        published_at = None
+        pub_date = work.get("publication_date")
+        if pub_date:
+            try:
+                published_at = datetime.fromisoformat(pub_date).replace(tzinfo=timezone.utc)
+            except ValueError:
+                pass
+        authors = [(a.get("author") or {}).get("display_name") for a in (work.get("authorships") or [])]
+        items.append(LiveItem(
+            source_key="openalex",
+            url=url,
+            title=title,
+            published_at=published_at,
+            summary=_reconstruct_openalex_abstract(work.get("abstract_inverted_index")),
+            author=", ".join(a for a in authors if a) or None,
+            raw_categories=work.get("type"),
+        ))
+    return items
+
+
+# --------------------------------------------------------------------------
+# GitHub — НЕ ПРОВЕРЕНО ВЖИВУЮ. Без токена работает (60 запросов/час на IP),
+# с токеном — 5000/час. Другой тип сигнала, чем академические источники:
+# ранний рост open-source активности вокруг темы, до появления публикаций.
+# --------------------------------------------------------------------------
+
+GITHUB_SEARCH_API = "https://api.github.com/search/repositories"
+
+
+def fetch_github_live(client: httpx.Client, query: str, *, limit: int = 20) -> list[LiveItem]:
+    headers = {"Accept": "application/vnd.github+json"}
+    if GITHUB_TOKEN:
+        headers["Authorization"] = f"Bearer {GITHUB_TOKEN}"
+    params = {"q": query, "per_page": str(limit)}
+    resp = _get(client, f"{GITHUB_SEARCH_API}?{urlencode(params)}", headers=headers)
+    if resp is None or resp.status_code != 200:
+        return []
+
+    try:
+        data = resp.json()
+    except ValueError:
+        log.error("github: не удалось разобрать ответ как JSON")
+        return []
+
+    items = []
+    for repo in data.get("items", []):
+        full_name = repo.get("full_name")
+        url = repo.get("html_url")
+        if not full_name or not url:
+            continue
+        created_at = None
+        if repo.get("created_at"):
+            try:
+                created_at = datetime.fromisoformat(repo["created_at"].replace("Z", "+00:00"))
+            except ValueError:
+                pass
+        items.append(LiveItem(
+            source_key="github",
+            url=url,
+            title=full_name,
+            published_at=created_at,
+            summary=repo.get("description"),
+            author=(repo.get("owner") or {}).get("login"),
+            raw_categories=repo.get("language"),
+        ))
+    return items
+
+
+# --------------------------------------------------------------------------
+# Hacker News (через Algolia HN Search — стандартный публичный API для
+# поиска по HN, ключ не нужен). НЕ ПРОВЕРЕНО ВЖИВУЮ. Важная оговорка: у
+# обычных ссылочных постов на HN нет своего текста (story_text есть только
+# у Ask/Show HN) — без summary такие кандидаты не пройдут
+# classifier._clean_model_input (MIN_SUMMARY_CHARS) и не попадут в модель,
+# это ожидаемо, не баг.
+# --------------------------------------------------------------------------
+
+HACKERNEWS_SEARCH_API = "https://hn.algolia.com/api/v1/search"
+
+
+def fetch_hackernews_live(client: httpx.Client, query: str, *, limit: int = 20) -> list[LiveItem]:
+    params = {"query": query, "tags": "story", "hitsPerPage": str(limit)}
+    resp = _get(client, f"{HACKERNEWS_SEARCH_API}?{urlencode(params)}")
+    if resp is None or resp.status_code != 200:
+        return []
+
+    try:
+        data = resp.json()
+    except ValueError:
+        log.error("hackernews: не удалось разобрать ответ как JSON")
+        return []
+
+    items = []
+    for hit in data.get("hits", []):
+        title = hit.get("title")
+        object_id = hit.get("objectID")
+        if not title or not object_id:
+            continue
+        url = hit.get("url") or f"https://news.ycombinator.com/item?id={object_id}"
+        created_at = None
+        if hit.get("created_at"):
+            try:
+                created_at = datetime.fromisoformat(hit["created_at"].replace("Z", "+00:00"))
+            except ValueError:
+                pass
+        items.append(LiveItem(
+            source_key="hackernews",
+            url=url,
+            title=title,
+            published_at=created_at,
+            summary=hit.get("story_text"),
+            author=hit.get("author"),
+        ))
+    return items
+
+
+# --------------------------------------------------------------------------
+# Reddit — ПРОВЕРЕНО, И ПРОВЕРКА ПОКАЗАЛА ОТКАЗ: публичный keyless-путь
+# (www.reddit.com/search.json) без OAuth возвращает 403 — анти-бот
+# HTML-страница вместо JSON, не изредка, а стабильно с датацентровского IP.
+# Рабочий путь есть — OAuth через client_credentials (тот же паттерн, что
+# EPO OPS выше), но это ровно та регистрация приложения, которой этот заход
+# сознательно избегал (решение по проекту). НЕ включено в fetch_all_live().
+# Низкий trust_level в LIVE_SOURCE_META оставлен осознанно на случай, если
+# OAuth всё же будет подключён позже — соцсеть, ТЗ требует не считать такие
+# источники единственным основанием для сигнала.
+# --------------------------------------------------------------------------
+
+REDDIT_SEARCH_API = "https://www.reddit.com/search.json"
+
+
+def fetch_reddit_live(client: httpx.Client, query: str, *, limit: int = 20) -> list[LiveItem]:
+    params = {"q": query, "sort": "relevance", "limit": str(limit)}
+    resp = _get(client, f"{REDDIT_SEARCH_API}?{urlencode(params)}")
+    if resp is None or resp.status_code != 200:
+        return []
+
+    try:
+        data = resp.json()
+    except ValueError:
+        log.error("reddit: не удалось разобрать ответ как JSON")
+        return []
+
+    items = []
+    for child in data.get("data", {}).get("children", []):
+        post = child.get("data", {})
+        title = post.get("title")
+        permalink = post.get("permalink")
+        if not title or not permalink:
+            continue
+        created_at = None
+        if post.get("created_utc"):
+            try:
+                created_at = datetime.fromtimestamp(post["created_utc"], tz=timezone.utc)
+            except (ValueError, OSError, OverflowError):
+                pass
+        items.append(LiveItem(
+            source_key="reddit",
+            url=f"https://www.reddit.com{permalink}",
+            title=title,
+            published_at=created_at,
+            summary=post.get("selftext") or None,
+            author=post.get("author"),
+            raw_categories=post.get("subreddit"),
+        ))
+    return items
+
+
+# --------------------------------------------------------------------------
+# PatentsView — ПРОВЕРЕНО, И ПРОВЕРКА ПОКАЗАЛА ПРОБЛЕМУ: search.patentsview.org
+# не резолвится (NXDOMAIN), а офиц. сайт patentsview.org/apis/purpose теперь
+# 301-редиректит на data.uspto.gov/support/transition-guide/patentsview —
+# PatentsView слился с USPTO ODP в единую платформу. Это НЕ независимая
+# keyless-альтернатива патентному пробелу, как предполагалось изначально:
+# тот же заблокированный ключ, что и у USPTO ODP (см. fetch_uspto_live).
+# Оставлено в файле нерабочим по той же причине — как задел, если ключ
+# ODP всё же появится. НЕ включено в fetch_all_live().
+# --------------------------------------------------------------------------
+
+PATENTSVIEW_API = "https://api.patentsview.org/patents/query"
+
+
+def fetch_patentsview_live(client: httpx.Client, query: str, *, limit: int = 20) -> list[LiveItem]:
+    headers = {"X-Api-Key": PATENTSVIEW_API_KEY} if PATENTSVIEW_API_KEY else None
+    params = {
+        "q": json.dumps({"_text_any": {"patent_title": query}}),
+        "f": json.dumps(["patent_id", "patent_title", "patent_date", "patent_abstract"]),
+        "o": json.dumps({"size": limit}),
+    }
+    resp = _get(client, f"{PATENTSVIEW_API}?{urlencode(params)}", headers=headers)
+    if resp is None or resp.status_code != 200:
+        return []
+
+    try:
+        data = resp.json()
+    except ValueError:
+        log.error("patentsview: не удалось разобрать ответ как JSON")
+        return []
+
+    items = []
+    for patent in data.get("patents", []):
+        title = patent.get("patent_title")
+        patent_id = patent.get("patent_id")
+        if not title or not patent_id:
+            continue
+        published_at = None
+        if patent.get("patent_date"):
+            try:
+                published_at = datetime.fromisoformat(patent["patent_date"]).replace(tzinfo=timezone.utc)
+            except ValueError:
+                pass
+        items.append(LiveItem(
+            source_key="patentsview",
+            url=f"https://patents.google.com/patent/US{patent_id}",
+            title=title,
+            published_at=published_at,
+            summary=patent.get("patent_abstract"),
+            raw_categories="patent_grant",
+        ))
+    return items
+
+
+# --------------------------------------------------------------------------
 # USPTO ODP — ключ есть в схеме, но не у нас. НЕ ПРОВЕРЕНО ВЖИВУЮ.
 # Путь эндпоинта и форма запроса — по документации Open Data Portal,
 # сверить перед реальным использованием: https://data.uspto.gov/apis
@@ -392,6 +674,29 @@ LIVE_SOURCE_META: dict[str, dict[str, str]] = {
         name="Crossref", site_url="https://www.crossref.org", source_type="doi_registry",
         trust_level="high", language="EN", topics="Все",
     ),
+    "openalex": dict(
+        name="OpenAlex", site_url="https://openalex.org", source_type="academic_aggregator",
+        trust_level="high", language="EN", topics="Все",
+    ),
+    "patentsview": dict(
+        name="PatentsView", site_url="https://patentsview.org", source_type="patent_office",
+        trust_level="high", language="EN", topics="Патенты США",
+    ),
+    "github": dict(
+        name="GitHub", site_url="https://github.com", source_type="code_repository",
+        # Первичная активность (код), не мнение — выше соцсетей, но не
+        # институциональный источник вроде arXiv/USPTO
+        trust_level="medium", language="EN", topics="Все",
+    ),
+    "hackernews": dict(
+        name="Hacker News", site_url="https://news.ycombinator.com", source_type="community_forum",
+        trust_level="medium", language="EN", topics="Все",
+    ),
+    "reddit": dict(
+        name="Reddit", site_url="https://reddit.com", source_type="social_media",
+        # ТЗ: соцсети не могут быть единственным основанием для сигнала
+        trust_level="low", language="EN", topics="Все",
+    ),
     "uspto_odp": dict(
         name="USPTO ODP", site_url="https://www.uspto.gov", source_type="patent_office",
         trust_level="high", language="EN", topics="Все (сильнее Роботы, Edge, ИИ-инфра)",
@@ -405,13 +710,32 @@ LIVE_SOURCE_META: dict[str, dict[str, str]] = {
 
 def fetch_all_live(query: str) -> list[LiveItem]:
     """Опросить все живые источники. Падение одного не должно ронять
-    остальные — тот же принцип изоляции, что в RSS-collector."""
+    остальные — тот же принцип изоляции, что в RSS-collector.
+
+    USPTO ODP и EPO OPS сюда сознательно не включены: ключи не будут
+    получены (решение по проекту), а без ключа fetch_uspto_live()/
+    fetch_epo_ops_live() и так всегда возвращали пусто — незачем на каждый
+    поиск дёргать заведомо пустой вызов и писать в лог "пропуск". Сами
+    функции и записи в LIVE_SOURCE_META оставлены в файле нетронутыми —
+    написаны по документации, в дело не введены; если ключ всё же появится,
+    достаточно вернуть две строчки в список ниже.
+
+    PatentsView сюда НЕ включён — проверка показала, что он слился с
+    USPTO ODP (см. комментарий у fetch_patentsview_live) и требует тот же
+    недоступный ключ. Патентный пробел остаётся открытым, честно.
+
+    Reddit сюда тоже НЕ включён — проверка показала стабильный 403 на
+    keyless-путь без OAuth (см. комментарий у fetch_reddit_live); OAuth
+    сознательно решили не подключать (та же регистрация, которой этот
+    заход избегал).
+    """
     fetchers = [
         ("arxiv", fetch_arxiv_live),
         ("semantic_scholar", fetch_semantic_scholar_live),
         ("crossref", search_crossref_live),
-        ("uspto_odp", fetch_uspto_live),
-        ("epo_ops", fetch_epo_ops_live),
+        ("openalex", fetch_openalex_live),
+        ("github", fetch_github_live),
+        ("hackernews", fetch_hackernews_live),
     ]
     items: list[LiveItem] = []
     with _client() as client:
@@ -423,6 +747,26 @@ def fetch_all_live(query: str) -> list[LiveItem]:
             except Exception as exc:
                 log.error("[%s] live-поиск упал: %s", key, exc)
     return items
+
+
+_CYRILLIC_RE = re.compile(r"[а-яА-ЯёЁ]")
+
+
+def _detect_language(text: str) -> str:
+    """LIVE_SOURCE_META['language'] — язык ИНТЕРФЕЙСА источника (сайты
+    arXiv/Crossref/USPTO/EPO — все английские), не язык конкретной работы.
+    Crossref, например, индексирует и русскоязычные журналы — если слепо
+    наследовать язык источника на каждую запись (как было раньше), такая
+    статья получает ложную метку EN и уходит в classifier.py как валидный
+    английский вход; модель обучена и проверена только на английском (см.
+    classifier.py) и на русском тексте выдаёт мусорную классификацию —
+    поймано вручную: набор русскоязычных Crossref-статей про нейроморфные
+    чипы классифицировался как "шум" с предикторами из русских стоп-слов
+    ("из", "это", "на", "для"). Грубая эвристика вместо детектора языка:
+    для двуязычного EN/RU корпуса наличия кириллицы достаточно, без новой
+    ML-зависимости.
+    """
+    return "RU" if _CYRILLIC_RE.search(text) else "EN"
 
 
 def _upsert_source(session: Session, source_key: str) -> Source:
@@ -483,7 +827,7 @@ def persist_live_items(session: Session, items: list[LiveItem]) -> list[FeedItem
             raw_categories=item.raw_categories,
             trust_level=src.trust_level,
             source_type=src.source_type,
-            language=src.language,
+            language=_detect_language(f"{item.title} {item.summary or ''}"),
         )
         session.add(row)
         try:

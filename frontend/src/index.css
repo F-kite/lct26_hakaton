@@ -1,0 +1,49 @@
+@import "tailwindcss";
+
+/* Токены из frontend_mockup/UI_kit/Colors.png + Typography.png */
+@theme {
+  --font-display: "Jura", sans-serif;
+  --font-sans: "Onest", "Inter", "Noto Sans", sans-serif;
+
+  --color-primary: #1919ef;
+  --color-primary-50: #edf2ff;
+  --color-pressed: #0093ff;
+  --color-link: #0000c8;
+  --color-link-hover: #4040fa;
+  --color-success: #64d498;
+  --color-error: #da5658;
+
+  --color-neutral-0: #ffffff;
+  --color-neutral-50: #f4f6f9;
+  --color-neutral-100: #f2f2f2;
+  --color-neutral-200: #ededef;
+  --color-neutral-300: #e8e8e8;
+  --color-neutral-400: #6b7380;
+  --color-neutral-500: #a7abad;
+  --color-neutral-600: #6f7985;
+  --color-neutral-900: #242429;
+  --color-neutral-950: #0f0f0f;
+  --color-muted: #688499;
+  --color-secondary: #556575;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  background: var(--color-neutral-100);
+  color: var(--color-neutral-900);
+}
+
+h1, h2, h3, h4, h5 {
+  font-family: var(--font-display);
+  font-weight: 700;
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.animate-fade-in {
+  animation: fade-in 0.35s ease-out;
+}

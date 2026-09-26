@@ -1,0 +1,34 @@
+import type { SignalSource } from "../../api/types";
+
+interface Props {
+  text: string | null;
+  // Источник, чей текст реально стал этим кейс-примером (is_primary=true) —
+  // подписываем платформой, чтобы было видно, откуда взят материал.
+  primarySource: SignalSource | null;
+}
+
+export default function CaseExamples({ text, primarySource }: Props) {
+  if (!text) return null;
+
+  return (
+    <div className="rounded-2xl bg-neutral-0 p-6 shadow-sm">
+      <h3 className="font-bold text-neutral-950">Где это уже проявилось</h3>
+      <p className="mt-3 rounded-xl bg-neutral-50 p-4 text-sm leading-relaxed text-neutral-700">
+        {text}
+      </p>
+      {primarySource && (
+        <p className="mt-2 text-xs text-neutral-500">
+          Источник:{" "}
+          <a
+            href={primarySource.url}
+            target="_blank"
+            rel="noreferrer"
+            className="font-medium text-link hover:text-link-hover"
+          >
+            {primarySource.source_name}
+          </a>
+        </p>
+      )}
+    </div>
+  );
+}

@@ -47,6 +47,10 @@ services:
         condition: service_healthy
     environment:
       DATABASE_URL: postgresql+psycopg://signals:signals@db:5432/signals
+      OLLAMA_BASE_URL: http://ollama:11434
+      OLLAMA_MODEL: qwen2.5:3b
+      # localhost:5173 — vite dev-сервер, localhost:5174 — фронтенд в Docker
+      FRONTEND_ORIGINS: http://localhost:5173,http://localhost:5174
     ports:
       # 8000 на хосте попадает в зарезервированный Windows диапазон портов
       # (netsh int ipv4 show excludedportrange, 7919-8018) — снаружи 9000,
@@ -54,5 +58,30 @@ services:
       - "9000:8000"
     restart: unless-stopped
 
+  frontend:
+    build:
+      context: ../frontend
+      args:
+        # собранный JS выполняется в браузере пользователя, не внутри
+        # docker-сети — поэтому localhost:9000 (хостовый порт backend),
+        # а не http://backend:8000 (внутреннее DNS-имя сервиса)
+        VITE_API_BASE_URL: http://localhost:9000
+    depends_on:
+      - backend
+    ports:
+      - "5174:80"
+    restart: unless-stopped
+
+  ollama:
+    image: ollama/ollama
+    volumes:
+      # веса модели (~4-5 ГБ на qwen2.5:7b) — в volume, а не в слое образа,
+      # иначе перекачивались бы заново при каждом docker compose build
+      - ollama_data:/root/.ollama
+    ports:
+      - "11434:11434"
+    restart: unless-stopped
+
 volumes:
   pgdata:
+  ollama_data:

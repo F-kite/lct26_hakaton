@@ -15,6 +15,16 @@ SEARCH_CANDIDATE_LIMIT = int(os.getenv("SEARCH_CANDIDATE_LIMIT", "500"))
 SEARCH_TOP_N = int(os.getenv("SEARCH_TOP_N", "15"))
 # порог уверенности, ниже которого кандидат не считается сигналом
 SIGNAL_SCORE_THRESHOLD = float(os.getenv("SIGNAL_SCORE_THRESHOLD", "0.5"))
+# сколько отклонённых кандидатов сохраняем для вкладки "Исключённые" —
+# небольшой лимит: каждый отклонённый тоже проходит LLM-обогащение
+# (см. orchestrator.py), а Ollama на CPU медленная, раздувать без нужды
+# не стоит
+SEARCH_EXCLUDED_LIMIT = int(os.getenv("SEARCH_EXCLUDED_LIMIT", "5"))
+
+# --- CORS ---
+FRONTEND_ORIGINS = [
+    o.strip() for o in os.getenv("FRONTEND_ORIGINS", "http://localhost:5173").split(",") if o.strip()
+]
 
 # --- live-поиск по внешним API во время запроса (pipeline/live_sources.py) ---
 
@@ -27,11 +37,25 @@ CONTACT_EMAIL = os.getenv("CONTACT_EMAIL", "team@example.com")
 # проверено вручную).
 SEMANTIC_SCHOLAR_API_KEY = os.getenv("SEMANTIC_SCHOLAR_API_KEY")
 
-# USPTO ODP и EPO OPS — ключей пока нет, клиенты написаны заранее и
-# аккуратно пропускают себя, если ключ не задан (см. live_sources.py).
+# USPTO ODP и EPO OPS — ключей не будет (решение по проекту), клиенты
+# написаны, но не подключены к рабочему циклу (см. live_sources.py).
 USPTO_ODP_API_KEY = os.getenv("USPTO_ODP_API_KEY")
 EPO_OPS_KEY = os.getenv("EPO_OPS_KEY")
 EPO_OPS_SECRET = os.getenv("EPO_OPS_SECRET")
+
+# GitHub — без токена тоже работает (60 запросов/час на IP), токен просто
+# поднимает лимит до 5000/час; получается самостоятельно и мгновенно
+# (github.com/settings/tokens), без формы одобрения.
+GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
+
+# PatentsView (search.patentsview.org) — НЕ ПРОВЕРЕНО ВЖИВУЮ. У API
+# патентного офиса США была миграция на новый эндпоинт с обязательным
+# бесплатным ключом (в отличие от старого api.patentsview.org) — на момент
+# написания неизвестно, актуален ли ключ ещё нужен для этого конкретного
+# запроса; ключ опционален в коде на случай, если для search всё же не
+# требуется. Сверить с документацией при использовании:
+# https://search.patentsview.org/docs/
+PATENTSVIEW_API_KEY = os.getenv("PATENTSVIEW_API_KEY")
 
 # --- обученная модель (Этап 1 ТЗ) ---
 
@@ -44,11 +68,11 @@ MODEL_PATH = os.getenv("MODEL_PATH", "app/models/signal_classifier.pkl")
 
 # --- LLM-обогащение сигналов (описание/преимущество/кейс-пример, ТЗ) ---
 
-# YandexGPT из разрешённого ТЗ списка облачных моделей. Ключа пока нет у
-# команды — enrichment.py аккуратно пропускает себя без ключа/folder_id,
-# тот же принцип, что у USPTO ODP/EPO OPS в live_sources.py. Не проверено
-# вживую — структура запроса по документации Yandex Cloud Foundation Models,
-# сверить при получении ключа: https://yandex.cloud/ru/docs/foundation-models/
-YANDEX_GPT_API_KEY = os.getenv("YANDEX_GPT_API_KEY")
-YANDEX_GPT_FOLDER_ID = os.getenv("YANDEX_GPT_FOLDER_ID")
-YANDEX_GPT_MODEL = os.getenv("YANDEX_GPT_MODEL", "yandexgpt-lite")
+# Локальная модель вместо облачной (YandexGPT требовал ключ, которого нет,
+# и внешнюю зависимость) — Qwen2.5, разрешена ТЗ как модель с Hugging Face,
+# без согласования. Крутится отдельным сервисом Ollama в том же
+# docker-compose (см. RSS-collector/docker-compose.yml), backend стучится
+# по HTTP внутри docker-сети — тот же принцип, что был бы с YandexGPT,
+# просто локальный адрес вместо облачного.
+OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen2.5:7b")

@@ -47,15 +47,21 @@ def get_search_status(query_id: int, session: Session = Depends(get_session)) ->
     if q is None:
         raise HTTPException(status_code=404, detail="запрос не найден")
 
-    results = [signal_to_out(s) for s in q.signals] if q.status == "done" else None
+    results = None
+    excluded = None
+    if q.status == "done":
+        results = [signal_to_out(s) for s in q.signals if s.status == "included"]
+        excluded = [signal_to_out(s) for s in q.signals if s.status == "excluded"]
 
     return SearchStatusResponse(
         query_id=q.id,
         query_text=q.query_text,
         status=q.status,
+        phase=q.phase,
         sources_processed=q.sources_processed,
         candidates_found=q.candidates_found,
         signals_above_75=q.signals_above_75,
         error=q.error,
         results=results,
+        excluded=excluded,
     )

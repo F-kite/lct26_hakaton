@@ -105,6 +105,10 @@ class SearchQuery(Base):
     sources_processed: Mapped[int] = mapped_column(Integer, default=0)
     candidates_found: Mapped[int] = mapped_column(Integer, default=0)
     signals_above_75: Mapped[int] = mapped_column(Integer, default=0)
+    # этап пайплайна для модалки прогресса на фронте: collecting -> scoring
+    # -> ranking -> done — грубее реального пайплайна, но даёт честные (не
+    # выдуманные) промежуточные шаги вместо мгновенного скачка в "готово"
+    phase: Mapped[str | None] = mapped_column(String(32))
     error: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
@@ -137,6 +141,12 @@ class Signal(Base):
     mention_trend: Mapped[str | None] = mapped_column(Text)
     score: Mapped[float] = mapped_column(Float)
     is_mainstream: Mapped[bool] = mapped_column(Boolean, default=False)
+    # included — прошёл порог, показывается на вкладке "Слабые сигналы";
+    # excluded — не прошёл (низкая оценка и/или зрелая технология/шум),
+    # показывается на вкладке "Исключённые" с причиной в explanation —
+    # отдельное поле, а не is_mainstream: исключить может и "шум", не
+    # только зрелая технология
+    status: Mapped[str] = mapped_column(String(16), default="included")
     explanation: Mapped[dict] = mapped_column(JSONB, default=dict)  # интерпретируемость: ТЗ §2, §8.3
     model_version: Mapped[str] = mapped_column(String(64))  # какая модель/эвристика дала оценку
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
@@ -154,6 +164,10 @@ class SignalSource(Base):
 
     signal_id: Mapped[int] = mapped_column(ForeignKey("signals.id"), primary_key=True)
     feed_item_id: Mapped[int] = mapped_column(ForeignKey("feed_items.id"), primary_key=True)
+    # true — этот источник дал текст для LLM-обогащения (description/
+    # case_example), т.е. "где это уже проявилось" на самом деле про него;
+    # у остальных источников группы (см. display_grouping.py) — false.
+    is_primary: Mapped[bool] = mapped_column(Boolean, default=False)
 
     signal: Mapped[Signal] = relationship(back_populates="sources")
     feed_item: Mapped[FeedItem] = relationship()

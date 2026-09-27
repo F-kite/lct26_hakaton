@@ -1,4 +1,3 @@
-import BadgeCheckSolid from "@iconify-react/flowbite/badge-check-solid";
 import FileChartBarSolid from "@iconify-react/flowbite/file-chart-bar-solid";
 import FileCheckSolid from "@iconify-react/flowbite/file-check-solid";
 import FileLineSolid from "@iconify-react/flowbite/file-lines-solid";
@@ -130,12 +129,12 @@ export default function ResultsPage() {
             value={included.length}
             hint="Лучшие по результатам ранжирования"
           />
-          <StatCard
+          {/* <StatCard
             icon={BadgeCheckSolid}
             label="Высокая уверенность"
             value={status.signals_above_75}
             hint="Сигналы с уверенностью модели выше 75%"
-          />
+          /> */}
         </div>
 
         <div className="mt-8 rounded-2xl bg-neutral-200 p-3">

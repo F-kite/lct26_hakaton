@@ -1,3 +1,5 @@
+name: rss-collector
+
 x-logging: &default-logging
   driver: "json-file"
   options:
@@ -13,7 +15,7 @@ services:
       POSTGRES_PASSWORD: signals
       POSTGRES_DB: signals
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -21,17 +23,17 @@ services:
       interval: 5s
       retries: 10
   
-  adminer:
-    image: adminer
-    logging: *default-logging
-    ports:
-      - "8080:8080"
-    depends_on:
-      db:
-        condition: service_healthy
+  # adminer:
+  #   image: adminer
+  #   logging: *default-logging
+  #   ports:
+  #     - "8080:8080"
+  #   depends_on:
+  #     db:
+  #       condition: service_healthy
 
   collector:
-    build: .
+    build: ./RSS-collector
     logging: *default-logging
     depends_on:
       db:
@@ -47,7 +49,7 @@ services:
     restart: unless-stopped
 
   backend:
-    build: ../backend
+    build: ./backend
     logging: *default-logging
     depends_on:
       db:
@@ -64,7 +66,7 @@ services:
 
   frontend:
     build:
-      context: ../frontend
+      context: ./frontend
       args:
         VITE_API_BASE_URL: http://localhost:9000
     logging: *default-logging

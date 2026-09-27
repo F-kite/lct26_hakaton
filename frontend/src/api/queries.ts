@@ -15,12 +15,6 @@ export function useCreateSearch() {
   });
 }
 
-/**
- * Поллинг статуса поиска. `enabled=false` (например, после "Остановить
- * поиск" на фронте) просто прекращает запросы — пайплайн на бэкенде
- * продолжает выполняться в фоне, отменять его не пытаемся (см. план:
- * "только UI-отмена").
- */
 export function useSearchStatus(queryId: number | null, enabled: boolean) {
   return useQuery({
     queryKey: ["searchStatus", queryId],

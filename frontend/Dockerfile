@@ -1,5 +1,3 @@
-# Собираем статику, отдаём через nginx — тот же принцип, что backend:
-# независимый образ, не завязан на dev-сервер Vite.
 FROM node:22-alpine AS build
 WORKDIR /app
 COPY package.json package-lock.json ./

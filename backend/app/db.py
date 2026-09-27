@@ -1,22 +1,4 @@
 """ORM-модели и подключение к БД.
-
-Source/FeedItem — зеркало схемы RSS-collector (collector/db.py), та же
-таблица в той же Postgres `signals`, но определены заново: backend и
-collector — независимо разворачиваемые Docker-образы, кросс-импорт
-Python-модулей между ними не делаем.
-
-Изначально были только на чтение, теперь backend тоже пишет сюда:
-live-поиск (pipeline/live_sources.py) обогащает feed_items результатами
-arXiv/Semantic Scholar/Crossref/USPTO/EPO OPS прямо во время поиска —
-поэтому здесь нужны ВСЕ колонки реальной таблицы (включая NOT NULL без
-дефолта на уровне БД — is_indicator_only, sponsored_possible и т.д.),
-не только то, что было нужно для чтения.
-
-Signal/SignalSource/SearchQuery — новые таблицы, которыми владеет backend.
-
-Base.metadata.create_all() (см. init_db.py) безопасен для существующих
-sources/feed_items: create_all по умолчанию проверяет, что таблица уже
-есть в БД, и пропускает её — создаст только новые три таблицы.
 """
 
 from __future__ import annotations
@@ -37,7 +19,7 @@ class Base(DeclarativeBase):
 
 
 # --------------------------------------------------------------------------
-# Зеркало схемы collector — только чтение
+# Зеркало схемы collector
 # --------------------------------------------------------------------------
 
 class Source(Base):
@@ -88,13 +70,12 @@ class FeedItem(Base):
 
 
 # --------------------------------------------------------------------------
-# Новые таблицы — владелец backend
+# Новые таблицы
 # --------------------------------------------------------------------------
 
 class SearchQuery(Base):
     """Один открытый запрос пользователя (POST /search). Статус и счётчики
-    для стриминга прогресса через поллинг (GET /search/{id}/status) —
-    бонусные пункты ТЗ: обработано источников, кандидатов, сигналов >75%.
+    для прогресса через поллинг (GET /search/{id}/status).
     """
 
     __tablename__ = "search_queries"
@@ -105,9 +86,6 @@ class SearchQuery(Base):
     sources_processed: Mapped[int] = mapped_column(Integer, default=0)
     candidates_found: Mapped[int] = mapped_column(Integer, default=0)
     signals_above_75: Mapped[int] = mapped_column(Integer, default=0)
-    # этап пайплайна для модалки прогресса на фронте: collecting -> scoring
-    # -> ranking -> done — грубее реального пайплайна, но даёт честные (не
-    # выдуманные) промежуточные шаги вместо мгновенного скачка в "готово"
     phase: Mapped[str | None] = mapped_column(String(32))
     error: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
@@ -117,10 +95,9 @@ class SearchQuery(Base):
 
 
 class Signal(Base):
-    """Результат анализа — один потенциальный слабый сигнал. query_id=None
-    зарезервировано под накопленные сигналы вне конкретного запроса
-    пользователя (например, фоновая переоценка корпуса) — сейчас пайплайн
-    всегда создаёт их с query_id, но поле сделано nullable заранее.
+    """Результат анализа — один потенциальный слабый сигнал. query_id
+    сделан nullable заранее, под возможные сигналы вне конкретного запроса
+    (сейчас пайплайн всегда создаёт их с query_id).
     """
 
     __tablename__ = "signals"
@@ -129,26 +106,17 @@ class Signal(Base):
     query_id: Mapped[int | None] = mapped_column(ForeignKey("search_queries.id"))
     title: Mapped[str] = mapped_column(Text)
     area: Mapped[str | None] = mapped_column(String(64))
-    # description/potential_advantage/case_example — три поля ТЗ ("описание
-    # технологии, потенциальное преимущество, кейс-пример"), заполняются
-    # LLM-обогащением (pipeline/enrichment.py) строго по тексту источника,
-    # не из общих знаний модели. Обоснование КЛАССИФИКАЦИИ (почему слабый
-    # сигнал) — отдельно, в explanation, не путать с описанием технологии.
     description: Mapped[str | None] = mapped_column(Text)
+    problem: Mapped[str | None] = mapped_column(Text)
     potential_advantage: Mapped[str | None] = mapped_column(Text)
     case_example: Mapped[str | None] = mapped_column(Text)
     stage: Mapped[str | None] = mapped_column(String(64))
     mention_trend: Mapped[str | None] = mapped_column(Text)
     score: Mapped[float] = mapped_column(Float)
     is_mainstream: Mapped[bool] = mapped_column(Boolean, default=False)
-    # included — прошёл порог, показывается на вкладке "Слабые сигналы";
-    # excluded — не прошёл (низкая оценка и/или зрелая технология/шум),
-    # показывается на вкладке "Исключённые" с причиной в explanation —
-    # отдельное поле, а не is_mainstream: исключить может и "шум", не
-    # только зрелая технология
     status: Mapped[str] = mapped_column(String(16), default="included")
-    explanation: Mapped[dict] = mapped_column(JSONB, default=dict)  # интерпретируемость: ТЗ §2, §8.3
-    model_version: Mapped[str] = mapped_column(String(64))  # какая модель/эвристика дала оценку
+    explanation: Mapped[dict] = mapped_column(JSONB, default=dict)
+    model_version: Mapped[str] = mapped_column(String(64))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     query: Mapped[SearchQuery | None] = relationship(back_populates="signals")
@@ -156,17 +124,12 @@ class Signal(Base):
 
 
 class SignalSource(Base):
-    """Связь сигнала с подтверждающими записями — кросс-источниковое
-    подтверждение (⚑-источники по ТЗ не могут быть единственным основанием).
-    """
+    """Связь сигнала с подтверждающими записями."""
 
     __tablename__ = "signal_sources"
 
     signal_id: Mapped[int] = mapped_column(ForeignKey("signals.id"), primary_key=True)
     feed_item_id: Mapped[int] = mapped_column(ForeignKey("feed_items.id"), primary_key=True)
-    # true — этот источник дал текст для LLM-обогащения (description/
-    # case_example), т.е. "где это уже проявилось" на самом деле про него;
-    # у остальных источников группы (см. display_grouping.py) — false.
     is_primary: Mapped[bool] = mapped_column(Boolean, default=False)
 
     signal: Mapped[Signal] = relationship(back_populates="sources")

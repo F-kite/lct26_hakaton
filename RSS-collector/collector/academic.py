@@ -1,42 +1,3 @@
-"""Научно-патентные источники: поисковые API, а не статичные ленты.
-
-В отличие от RSS (core.py) и архивных HTML/sitemap-обходов (archive.py), у
-arXiv и Semantic Scholar нет фиксированного URL для поллинга — это поисковые
-API: каждый прогон ищет по теме/запросу, а не скачивает один и тот же адрес.
-Поэтому отдельный модуль. Персистентность и денормализация переиспользуют
-archive.ArchiveItem / archive.persist_items — те уже умеют писать в feed_items
-той же схемой, что и живой RSS-сбор.
-
-Разделение источников этого файла:
-
-arXiv (fetch_arxiv)
-    Atom API (export.arxiv.org/api/query), без ключа. Проверено вручную:
-    жёсткий rate-limit на общий (не привязанный к ключу) пул — первый же
-    "холодный" запрос без паузы поймал 429. Обязателен identifying
-    User-Agent с контактным email и пауза между запросами (см. ARXIV_MIN_INTERVAL).
-    source_type="preprint" — без peer review, это НЕ то же самое по весу
-    доказательства, что журнальная публикация.
-
-Semantic Scholar (fetch_semantic_scholar)
-    Academic Graph API, ключ формально "рекомендован", не обязателен.
-    Проверено вручную: безключевой пул сейчас стабильно отдаёт 429 на
-    каждую попытку (это общий инфраструктурный лимит Semantic Scholar,
-    не бага здесь) — код рабочий и корректный, но для реальной эксплуатации
-    нужен SEMANTIC_SCHOLAR_API_KEY. Без ключа функция просто вернёт мало
-    или ничего — это ожидаемо, не повод считать модуль сломанным.
-
-Crossref (verify_doi)
-    НЕ источник кандидатов — по своей роли в таблице источников это
-    верификация и дедупликация: подтверждение, что DOI, найденный в другом
-    источнике (arXiv/Semantic Scholar/упоминание в новости), существует,
-    и получение его канонических метаданных. Поэтому это не "коллектор",
-    возвращающий список ArchiveItem, а точечная lookup-функция.
-
-Ничего не подключено к loop — как и archive.py, отдельные команды в main.py.
-Что искать (конкретные search_query) — решение аналитика/скоринга, не
-зашито здесь: эта часть отвечает только за механику запроса и сохранения.
-"""
-
 from __future__ import annotations
 
 import logging
@@ -54,10 +15,6 @@ from .archive import ArchiveItem, REQUEST_TIMEOUT, _get, persist_items
 
 log = logging.getLogger(__name__)
 
-# Контактный email для polite pool (arXiv/Crossref вежливо просят себя
-# идентифицировать). НЕ хардкодить личный email — берётся из окружения,
-# чтобы не утекать в закоммиченный код репозитория, который может стать
-# публичным (SourceCraft).
 CONTACT_EMAIL = os.getenv("CONTACT_EMAIL", "team@example.com")
 USER_AGENT = f"LCT2026-WeakSignals/0.1 (hackathon research collector; mailto:{CONTACT_EMAIL})"
 
@@ -74,9 +31,6 @@ def _client(extra_headers: dict[str, str] | None = None) -> httpx.Client:
 # --------------------------------------------------------------------------
 
 ARXIV_API = "http://export.arxiv.org/api/query"
-# arXiv просит не чаще 1 запроса/3с на их общий пул. fetch_arxiv() делает один
-# запрос за вызов — паузу между запросами держит вызывающий код, если он
-# опрашивает несколько тем подряд (например, будущий цикл по seed-темам).
 
 ATOM_NS = {"atom": "http://www.w3.org/2005/Atom", "arxiv": "http://arxiv.org/schemas/atom"}
 
@@ -171,8 +125,7 @@ def fetch_semantic_scholar(
     client: httpx.Client, query: str, *, limit: int = 50, api_key: str | None = None,
 ) -> list[ArchiveItem]:
     """Поиск в Semantic Scholar. Без api_key безключевой пул может быть
-    перегружен (проверено вручную, 429 на каждой попытке) — не значит,
-    что код сломан, значит, что для продакшена нужен ключ.
+    перегружен (частые 429) — для продакшена нужен ключ.
     """
     params = {
         "query": query,
@@ -220,7 +173,7 @@ def fetch_semantic_scholar(
 
 
 # --------------------------------------------------------------------------
-# Crossref — верификация DOI, не источник кандидатов
+# Crossref
 # --------------------------------------------------------------------------
 
 CROSSREF_API = "https://api.crossref.org/works"
@@ -238,9 +191,8 @@ class CrossrefWork:
 def verify_doi(client: httpx.Client, doi: str) -> CrossrefWork | None:
     """Подтвердить существование DOI и получить канонические метаданные.
 
-    Роль по ТЗ: верификация и дедупликация публикаций, найденных в других
-    источниках (arXiv/Semantic Scholar/упоминание в новости) — не discovery
-    новых кандидатов, поэтому нет fetch_crossref() в духе fetch_arxiv().
+    Верификация/дедупликация, а не discovery кандидатов — поэтому нет
+    fetch_crossref() в духе fetch_arxiv().
     """
     doi = doi.strip().removeprefix("https://doi.org/").removeprefix("http://doi.org/")
     resp = _get(client, f"{CROSSREF_API}/{doi}")

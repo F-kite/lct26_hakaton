@@ -1,17 +1,20 @@
+import BrowserEdgeIcon from '@iconify-react/bi/browser-edge';
+import FilterFilledIcon from '@iconify-react/carbon/filter-filled';
+import FileCheckSolidIcon from '@iconify-react/flowbite/file-check-solid';
+
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { useCreateSearch, useSearchStatus } from "../api/queries";
 import Logo from "../components/Logo";
-import { DocumentCheckIcon, FilterIcon, RefreshIcon } from "../components/icons";
 import SearchInput from "../components/search/SearchInput";
 import SearchProgressModal from "../components/search/SearchProgressModal";
 import StopConfirmModal from "../components/search/StopConfirmModal";
 
 const STEPS = [
-  { label: "Анализируем источники", Icon: RefreshIcon, solid: false },
-  { label: "Отделяем новое от шума", Icon: FilterIcon, solid: true },
-  { label: "Показываем кейсы и источники", Icon: DocumentCheckIcon, solid: true },
+  { label: "Анализируем источники", Icon: BrowserEdgeIcon, solid: false },
+  { label: "Отделяем новое от шума", Icon: FilterFilledIcon, solid: true },
+  { label: "Показываем кейсы и источники", Icon: FileCheckSolidIcon, solid: true },
 ];
 
 export default function SearchHomePage() {
@@ -42,8 +45,6 @@ export default function SearchHomePage() {
   };
 
   const handleConfirmStop = () => {
-    // Только UI-отмена: прекращаем поллинг, пайплайн на бэкенде
-    // доработает в фоне без видимого эффекта для пользователя.
     setPollingEnabled(false);
     setActiveQueryId(null);
     setConfirmingStop(false);
@@ -53,8 +54,8 @@ export default function SearchHomePage() {
   const showProgress = activeQueryId !== null && status?.status !== "done";
 
   return (
-    <div className="animate-fade-in min-h-screen bg-neutral-100">
-      <header className="px-6 py-6 sm:px-10">
+    <div className="animate-fade-in flex min-h-screen flex-col bg-neutral-100">
+      <header className="px-6 pb-3 pt-7 sm:px-10 xl:px-20">
         <Logo />
       </header>
 
@@ -64,7 +65,7 @@ export default function SearchHomePage() {
         </div>
       )}
 
-      <main className="mx-auto flex max-w-3xl flex-col items-center px-6 pt-24 text-center sm:pt-32">
+      <main className="mx-auto flex w-full max-w-4xl flex-1 flex-col items-center justify-center px-6 text-center">
         <h1 className="text-4xl font-bold text-neutral-950 sm:text-5xl">Что хотите исследовать?</h1>
         <p className="mt-3 text-neutral-500">Введите технологическое направление</p>
 
@@ -72,19 +73,17 @@ export default function SearchHomePage() {
           <SearchInput size="lg" onSubmit={handleSubmit} />
         </div>
 
-        <div className="mt-10 flex flex-wrap justify-center gap-3">
-          {STEPS.map(({ label, Icon, solid }) => (
+        <div className="mt-10 flex justify-center gap-3 sm:mt-16 xl:mt-61">
+          {STEPS.map(({ label, Icon }) => (
             <div
               key={label}
-              className="flex items-center gap-2 rounded-full bg-neutral-0 px-4 py-2 text-sm text-neutral-700 shadow-sm"
+              className="flex items-center gap-2 rounded-full bg-neutral-200 pl-4 pr-2 py-2 text-sm text-neutral-700 shadow-sm" 
             >
               {label}
               <span
-                className={`flex h-6 w-6 items-center justify-center rounded-full ${
-                  solid ? "bg-primary text-white" : "bg-primary-50 text-primary"
-                }`}
+                className={`flex h-10 w-10 items-center justify-center rounded-full bg-neutral-100 text-primary`}
               >
-                <Icon className="h-3.5 w-3.5" />
+                <Icon className="h-6 w-6" />
               </span>
             </div>
           ))}

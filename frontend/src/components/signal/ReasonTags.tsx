@@ -2,14 +2,21 @@ import type { Signal } from "../../api/types";
 
 export default function ReasonTags({ signal }: { signal: Signal }) {
   const tags = signal.explanation.key_predictors ?? [];
-  const heading = signal.status === "included" ? "Почему это слабый сигнал" : "Почему кандидат исключён";
+  const included = signal.status === "included";
+  const heading = included ? "Почему это слабый сигнал" : "Почему кандидат исключён";
+  const pct = Math.round(signal.score * 100);
+  const predicted = signal.explanation.predicted_class;
+  const isWeakSignalClass = predicted === "слабый сигнал";
+  const summary = included
+    ? `Модель определила технологию как слабый сигнал с уверенностью ${pct}% — на основе ключевых упоминаний, которые присутствуют в источнике.`
+    : isWeakSignalClass
+      ? `Модель распознала признаки слабого сигнала, но с уверенностью всего ${pct}% — ниже порога, необходимого для попадания в выдачу.`
+      : `Модель отнесла технологию к классу «${predicted ?? "зрелая технология"}», а не к слабым сигналам.`;
 
   return (
     <div className="rounded-2xl bg-neutral-0 p-6 shadow-sm">
       <h3 className="font-bold text-neutral-950">{heading}</h3>
-      {signal.explanation.rationale && (
-        <p className="mt-2 text-sm text-neutral-600">{signal.explanation.rationale}</p>
-      )}
+      <p className="mt-2 text-sm text-neutral-600">{summary}</p>
       {tags.length > 0 && (
         <div className="mt-4 flex flex-wrap gap-2">
           {tags.map((tag) => (
@@ -22,6 +29,11 @@ export default function ReasonTags({ signal }: { signal: Signal }) {
           ))}
         </div>
       )}
+      {/* {signal.explanation.rationale && (
+        <p className="mt-4 border-t border-neutral-100 pt-3 font-mono text-xs text-neutral-400">
+          {signal.explanation.rationale}
+        </p>
+      )} */}
     </div>
   );
 }

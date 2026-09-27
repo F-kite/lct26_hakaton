@@ -20,8 +20,9 @@ function SourceCard({ source, showAiDisclosure }: { source: SignalSource; showAi
   return (
     <div className="rounded-2xl bg-neutral-0 p-5 shadow-sm">
       <div className="flex gap-4">
-        <div className="w-20 shrink-0 text-xs text-neutral-500">{formatDate(source.published_at)}</div>
+        <div className="w-20 shrink-0 text-sm text-neutral-600">{formatDate(source.published_at)}</div>
         <div className="flex-1">
+          <div className="text-xs text-neutral-500">{source.source_name}</div>
           <h4 className="font-medium text-neutral-900">{source.title}</h4>
           <div className="mt-2 flex flex-wrap gap-2">
             <span className="rounded-full bg-neutral-100 px-2.5 py-1 text-xs text-neutral-600">
@@ -39,7 +40,7 @@ function SourceCard({ source, showAiDisclosure }: { source: SignalSource; showAi
             rel="noreferrer"
             className="mt-2 inline-block text-sm font-medium text-link hover:text-link-hover"
           >
-            Открыть источник →
+            Подробнее →
           </a>
         </div>
         <div className="w-36 shrink-0 text-xs text-neutral-500">
@@ -55,10 +56,7 @@ function SourceCard({ source, showAiDisclosure }: { source: SignalSource; showAi
 
 interface SourcesListProps {
   sources: SignalSource[];
-  // Русское резюме сигнала (description/potential_advantage/case_example)
-  // сгенерировано ИИ из материала источников — ТЗ требует отмечать это
-  // "возле источника" для зарубежного (не RU) материала, не только один
-  // раз у самого текста резюме.
+  // Показывать бейдж "Резюме сгенерировано ИИ" у зарубежных (не RU) источников.
   enriched: boolean;
 }
 

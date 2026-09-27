@@ -2,8 +2,7 @@ import type { SignalSource } from "../../api/types";
 
 interface Props {
   text: string | null;
-  // Источник, чей текст реально стал этим кейс-примером (is_primary=true) —
-  // подписываем платформой, чтобы было видно, откуда взят материал.
+  // Источник, чей текст реально стал этим кейс-примером (is_primary=true)
   primarySource: SignalSource | null;
 }
 

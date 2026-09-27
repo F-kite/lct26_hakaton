@@ -1,4 +1,4 @@
-// Зеркало backend/app/schemas.py — имена полей совпадают дословно.
+// Зеркало backend/app/schemas.py
 
 export interface SignalSource {
   feed_item_id: number;
@@ -10,8 +10,6 @@ export interface SignalSource {
   trust_level: "high" | "medium" | "low" | string;
   language: string;
   published_at: string | null;
-  // true — именно этот источник дал текст для LLM-обогащения (description/
-  // case_example) этого сигнала, см. orchestrator.py::_persist_signal.
   is_primary: boolean;
 }
 
@@ -19,9 +17,6 @@ export interface SignalExplanation {
   predicted_class: string | null;
   class_probabilities?: Record<string, number>;
   rationale?: string;
-  // Топ термов, реально повлиявших на классификацию — см.
-  // classifier.py::explain_features(). Настоящая word-level
-  // интерпретируемость, не статичные категории.
   key_predictors?: string[];
   enrichment_model?: string;
 }
@@ -33,6 +28,7 @@ export interface Signal {
   title: string;
   area: string | null;
   description: string | null;
+  problem: string | null;
   potential_advantage: string | null;
   case_example: string | null;
   stage: string | null;

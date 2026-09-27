@@ -1,8 +1,4 @@
 """Реестр лент.
-
-Поля соответствуют схеме Source из рабочей таблицы источников.
-store_summary=False — для источников, чьи Terms запрещают хранить текст
-(TechCrunch: только заголовок, ссылка, дата, атрибуция).
 """
 
 from dataclasses import dataclass, field
@@ -12,28 +8,17 @@ from dataclasses import dataclass, field
 class Feed:
     key: str                     # уникальный идентификатор ленты
     source_name: str             # человекочитаемое имя источника
-    url: str | None              # URL ленты; None => требуется discover
-    site_url: str                # корень сайта, для автодискавери
+    url: str | None              # URL ленты; None
+    site_url: str                # корень сайта
     source_type: str             # tech_media | university | industry_report | ...
     trust_level: str             # high | medium | low
     language: str                # EN | RU
     topics: tuple[str, ...]      # темы покрытия
-    is_indicator_only: bool = False   # ⚑ требует кросс-подтверждения
+    is_indicator_only: bool = False   # требует кросс-подтверждения
     sponsored_possible: bool = False  # возможны рекламные материалы
     store_summary: bool = True        # можно ли хранить summary из ленты
     attribution_required: bool = False
     notes: str = ""
-    # False — источник не опрашивается через core.collect_one (не RSS/Atom,
-    # feedparser его не разберёт). url тогда — справочный базовый эндпоинт,
-    # не адрес для поллинга через core.py. Запись в FEEDS всё равно нужна:
-    # archive.persist_items() резолвит source_id и денормализацию через
-    # BY_KEY для ЛЮБОГО источника, не только RSS.
-    # Два разных случая среди rss_pollable=False:
-    #   - academic.py (arxiv, semantic_scholar) — поисковые API по запросу,
-    #     НЕ часть loop, запускаются вручную с конкретным search_query.
-    #   - html_sources.py (stanford_hai, mipt, a3_automate) — HTML/JSON,
-    #     но по смыслу такие же "текущие ленты", как RSS: ЧАСТЬ loop,
-    #     просто опрашиваются через collect_html_sources(), а не collect_one().
     rss_pollable: bool = True
 
 
@@ -112,8 +97,7 @@ FEEDS: list[Feed] = [
         notes="Раздел «Экспертиза» — комментарии учёных. Много не-технических тем, "
               "фильтровать на стороне скоринга.",
     ),
-    # Не RSS-ленты — поисковые API (academic.py). url здесь не URL для поллинга,
-    # а базовый эндпоинт, для справки; собираются по search_query, не по адресу.
+    # Поисковые API (academic.py), url справочный.
     Feed(
         key="arxiv",
         source_name="arXiv",
@@ -160,9 +144,6 @@ FEEDS: list[Feed] = [
               "лента ≠ весь корпус, основная часть контента только для членов "
               "организации.",
     ),
-    # Не RSS — HTML/JSON-источники (html_sources.py). Часть обычного loop
-    # (collect_html_sources()), url — справочная точка входа для парсера,
-    # не адрес для feedparser.
     Feed(
         key="stanford_hai",
         source_name="Stanford HAI",
@@ -191,7 +172,7 @@ FEEDS: list[Feed] = [
         rss_pollable=False,
         notes="Проверено вручную — публичного RSS/API нет (Angular SPA), "
               "но найден незадокументированный внутренний JSON-эндпоинт "
-              "(тот же, что использует сам сайт). Отдаёт ВСЕ новости одним "
+              "(тот же, что использует сам сайт). Отдаёт все новости одним "
               "ответом, без пагинации; параметр tag игнорируется сервером — "
               "фильтрация по темам (science/ai/innovation/people/top-ii) "
               "не реализована, берём общий поток. Детального эндпоинта с "

@@ -1,6 +1,7 @@
+import ArrowRight from "@iconify-react/bi/arrow-right";
+import Search from "@iconify-react/famicons/search";
+import X from "@iconify-react/bi/x";
 import { useState } from "react";
-
-import { ArrowRightIcon, CloseIcon, SearchIcon } from "../icons";
 
 interface SearchInputProps {
   size?: "lg" | "sm";
@@ -9,12 +10,6 @@ interface SearchInputProps {
   onSubmit: (query: string) => void;
 }
 
-/**
- * Поле поиска — состояния default/focus/typing/typed из макета
- * (frontend_mockup/State_field_*.png). Автокомплит в макете — декоративный
- * плейсхолдер ("Value" x4, без реального источника данных) — намеренно не
- * реализован, показывать выдуманные подсказки не стали.
- */
 export default function SearchInput({
   size = "lg",
   defaultValue = "",
@@ -31,6 +26,10 @@ export default function SearchInput({
   };
 
   const isLg = size === "lg";
+  const hasValue = value.length > 0;
+  const showClear = !focused && hasValue;
+  const showMutedArrow = focused && !hasValue;
+  const buttonSize = isLg ? "h-12 w-12" : "h-8 w-8";
 
   return (
     <form
@@ -50,25 +49,30 @@ export default function SearchInput({
           isLg ? "text-lg" : "text-sm"
         }`}
       />
-      {value && (
+
+      {showClear ? (
         <button
           type="button"
           aria-label="Очистить"
           onClick={() => setValue("")}
-          className="mr-1 flex items-center justify-center text-neutral-500 hover:text-neutral-900 px-1"
+          className={`flex items-center justify-center rounded-full text-neutral-600 transition-colors hover:cursor-pointer ${buttonSize}`}
         >
-          <CloseIcon />
+          <X className="h-5 w-5" />
+        </button>
+      ) : (
+        <button
+          type="submit"
+          aria-label="Найти"
+          onMouseDown={(e) => e.preventDefault()}
+          className={`flex items-center justify-center rounded-full transition-colors hover:cursor-pointer ${buttonSize} ${
+            showMutedArrow
+              ? "bg-neutral-200 text-muted"
+              : "bg-primary text-white hover:bg-link-hover active:bg-pressed"
+          }`}
+        >
+          {focused ? <ArrowRight className="h-5 w-5" /> : <Search className="h-5 w-5" />}
         </button>
       )}
-      <button
-        type="submit"
-        aria-label="Найти"
-        className={`flex items-center justify-center rounded-full bg-primary text-white hover:bg-link-hover active:bg-pressed transition-colors ${
-          isLg ? "h-12 w-12" : "h-8 w-8"
-        }`}
-      >
-        {value ? <ArrowRightIcon className="h-5 w-5" /> : <SearchIcon className="h-5 w-5" />}
-      </button>
     </form>
   );
 }

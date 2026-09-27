@@ -1,14 +1,4 @@
 """Оркестрация: запрос -> кандидаты -> оценка моделью -> топ-N -> запись в БД.
-
-Стыкует candidates.py (данные) и classifier.py (модель) — сам оркестратор
-работает с Protocol SignalClassifier, не знает деталей конкретной модели.
-
-DEFAULT_CLASSIFIER грузится на импорте модуля (при старте приложения) и
-падает громко, если файл модели недоступен/битый — раньше здесь был тихий
-откат на эвристику, но эвристику убрали совсем (см. classifier.py), так что
-скрывать сбой загрузки молчаливой деградацией больше нечем и незачем:
-лучше сервис не поднимется и будет сразу видно, что не так, чем он молча
-станет отвечать пустыми результатами.
 """
 
 from __future__ import annotations
@@ -58,8 +48,8 @@ def _is_mainstream(result) -> bool:
 def _was_scored(result: ScoringResult) -> bool:
     """True, если кандидат реально дошёл до модели (не отфильтрован на
     входе classifier.py по языку/длине текста — см. _clean_model_input).
-    Такие "неоценённые" кандидаты не показываем и на вкладке "Исключённые":
-    это не то же самое, что "модель посчитала зрелой технологией/шумом"."""
+    Такие кандидаты не показываем и на вкладке "Исключённые" — это не то
+    же самое, что "модель посчитала зрелой технологией/шумом"."""
     return result.explanation.get("predicted_class") is not None
 
 
@@ -84,12 +74,9 @@ def _persist_signal(
         query_id=q.id,
         title=candidate.title,
         description=enrichment.description if enrichment else None,
+        problem=enrichment.problem if enrichment else None,
         potential_advantage=enrichment.potential_advantage if enrichment else None,
         case_example=enrichment.case_example if enrichment else None,
-        # Модель — только 3-классовый классификатор, стадию не предсказывает
-        # (см. classifier.py). Не фабрикуем ложную точность: для прошедших
-        # порог сигналов подписываем статично "Ранняя стадия" — это и есть
-        # определение слабого сигнала по методологии, не гадание модели.
         stage="Ранняя стадия" if status == "included" else None,
         score=result.confidence,
         is_mainstream=_is_mainstream(result),
@@ -98,12 +85,7 @@ def _persist_signal(
         model_version=getattr(classifier, "model_version", "unknown"),
     )
     session.add(signal)
-    session.flush()  # нужен signal.id для SignalSource ниже
-    # Представитель группы (candidate) — тот единственный источник, чей
-    # текст реально ушёл в LLM и стал description/case_example. Помечаем
-    # его как primary, чтобы фронт мог подписать "Где это уже проявилось"
-    # именно платформой этого источника (arXiv/SiliconANGLE/...), а не
-    # первым попавшимся в списке.
+    session.flush()
     primary_feed_item_id = candidate.feed_item_ids[0]
     for feed_item_id in feed_item_ids:
         session.add(SignalSource(
@@ -116,17 +98,8 @@ def _persist_signal(
 def run_search(
     session: Session, query_id: int, classifier: SignalClassifier = DEFAULT_CLASSIFIER,
 ) -> None:
-    """Выполнить пайплайн для уже созданной строки search_queries.
-
-    Вызывается из BackgroundTasks — исключения не должны ронять процесс
-    FastAPI, поэтому ловятся здесь и пишутся в SearchQuery.error, а не
-    всплывают наружу (тот же принцип изоляции, что в RSS-collector:
-    падение одного прогона не должно портить сервис целиком).
-
-    phase — грубые этапы для модалки прогресса на фронте (макет: "Источники
-    собраны" -> "Проверка стадии" -> "Формируем ТОП-15"). Отмена поиска
-    сделана только на фронте (прекращение поллинга) — пайплайн здесь не
-    проверяет никакого флага отмены и всегда доходит до конца.
+    """Исключения ловятся здесь и пишутся в SearchQuery.error. Отмена —
+    только на фронте (прекращение поллинга), пайплайн доходит до конца.
     """
     q = session.get(SearchQuery, query_id)
     if q is None:
@@ -138,15 +111,6 @@ def run_search(
     session.commit()
 
     try:
-        # Поиск (find_candidates по накопленной БД + fetch_all_live) ищет
-        # буквальные совпадения слов запроса — русский запрос почти
-        # никогда не встретит англоязычные заголовки, а модель ниже всё
-        # равно проверена только на английском (см. classifier.py), так
-        # что даже найденный русскоязычный материал не дошёл бы до
-        # скоринга. Переводим ЗАПРОС (не контент) на английский перед
-        # поиском — единый языковой формат для матчинга. q.query_text
-        # (оригинал, как ввёл пользователь) в БД и в выдаче не меняется,
-        # переведённая версия используется только локально здесь.
         search_query_text = q.query_text
         if _detect_language(q.query_text) != "EN" and enrichment_available():
             with httpx.Client() as translate_client:
@@ -159,12 +123,6 @@ def run_search(
         candidates = list(db_candidates)
         seen_feed_item_ids = {c.feed_item_ids[0] for c in candidates}
 
-        # Живой поиск во внешних API (arXiv, Semantic Scholar, Crossref,
-        # OpenAlex, GitHub, Hacker News — USPTO ODP/EPO OPS пропущены,
-        # ключей не будет) — то самое "в реальном времени, не
-        # ограничиваясь датасетом" из ТЗ. Найденное сразу пишется в
-        # feed_items (обогащение БД для будущих поисков), не только
-        # используется здесь.
         live_items = fetch_all_live(search_query_text)
         live_feed_items = persist_live_items(session, live_items)
         for fi in live_feed_items:
@@ -173,13 +131,6 @@ def run_search(
                 seen_feed_item_ids.add(fi.id)
 
         q.candidates_found = len(candidates)
-        # "Обработано источников" — количество отдельных МАТЕРИАЛОВ
-        # (публикаций/патентов/отчётов), которые система реально просмотрела,
-        # а не количество разных платформ (было len({source_key}) — почти
-        # всегда 1-3 при десятках найденных кандидатов, выглядело как явная
-        # недосчёт). db_candidates — уже найденное в накопленной БД,
-        # len(live_items) — сырое количество, вернувшееся от внешних API до
-        # дедупа с уже увиденными записями.
         q.sources_processed = len(db_candidates) + len(live_items)
         session.commit()
 
@@ -192,9 +143,7 @@ def run_search(
         passed = [(c, r) for c, r in scored if r.confidence >= SIGNAL_SCORE_THRESHOLD]
         passed.sort(key=lambda pair: pair[1].confidence, reverse=True)
 
-        # Отклонённые, но реально оценённые моделью — топ-N по убыванию
-        # оценки для вкладки "Исключённые" (причина = predicted_class +
-        # key_predictors из explanation, читается на фронте).
+
         rejected = [
             (c, r) for c, r in scored
             if _was_scored(r) and (r.confidence < SIGNAL_SCORE_THRESHOLD or _is_mainstream(r))
@@ -205,17 +154,10 @@ def run_search(
         q.phase = "ranking"
         session.commit()
 
-        # Группировка похожих кандидатов ТОЛЬКО для отображения числа
-        # источников на карточке — на уже отфильтрованном по порогу пуле,
-        # не на сырых сотнях кандидатов (см. display_grouping.py). Скоринг
-        # каждого кандидата уже посчитан индивидуально выше и не меняется.
         groups = group_for_display(classifier, passed)
         groups.sort(key=lambda g: g.result.confidence, reverse=True)
         top_groups = groups[:SEARCH_TOP_N]
 
-        # LLM-обогащение (описание/преимущество/кейс-пример) — только для
-        # финального топа и исключённых, не для всех сотен кандидатов (см.
-        # enrichment.py). Один httpx.Client на весь пайплайн.
         with httpx.Client() as llm_client:
             for group in top_groups:
                 _persist_signal(

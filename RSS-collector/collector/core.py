@@ -1,11 +1,4 @@
 """Сбор лент.
-
-Принципы, заложенные в реализацию:
-- Падение одной ленты не роняет прогон (per-feed isolation).
-- Условные запросы по ETag / Last-Modified — не дёргаем сервер зря.
-- Дедупликация по хешу URL на уровне БД (UNIQUE), не в памяти.
-- Ретраи с экспоненциальной задержкой на 429 и 5xx.
-- Для источников с store_summary=False текст не сохраняется вообще.
 """
 
 from __future__ import annotations
@@ -171,7 +164,7 @@ def collect_one(feed: Feed) -> CollectResult:
                 source_type=feed.source_type,
                 language=feed.language,
                 is_indicator_only=feed.is_indicator_only,
-                sponsored=False,   # проставляется отдельным классификатором
+                sponsored=False,
                 is_translated=False,
             )
             session.add(item)
@@ -179,7 +172,6 @@ def collect_one(feed: Feed) -> CollectResult:
                 session.flush()
                 new_count += 1
             except IntegrityError:
-                # гонка: запись успели вставить параллельно
                 session.rollback()
                 continue
 

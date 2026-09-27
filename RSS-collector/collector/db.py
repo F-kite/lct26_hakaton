@@ -1,4 +1,4 @@
-"""Схема БД. Соответствует полям Source из рабочей таблицы источников."""
+"""Схема БД"""
 
 from __future__ import annotations
 
@@ -34,7 +34,7 @@ class Source(Base):
     source_type: Mapped[str] = mapped_column(String(64))
     trust_level: Mapped[str] = mapped_column(String(16))
     language: Mapped[str] = mapped_column(String(8))
-    topics: Mapped[str] = mapped_column(Text)              # через запятую
+    topics: Mapped[str] = mapped_column(Text)
     is_indicator_only: Mapped[bool] = mapped_column(Boolean, default=False)
     sponsored_possible: Mapped[bool] = mapped_column(Boolean, default=False)
     attribution_required: Mapped[bool] = mapped_column(Boolean, default=False)
@@ -53,10 +53,6 @@ class Source(Base):
 
 class FeedItem(Base):
     """Одна публикация из ленты.
-
-    Полный текст статьи НЕ хранится — только то, что отдаёт лента.
-    Для источников с attribution_required храним ссылку на оригинал
-    и не модифицируем содержимое.
     """
 
     __tablename__ = "feed_items"
@@ -68,12 +64,12 @@ class FeedItem(Base):
     url: Mapped[str] = mapped_column(Text)
     url_hash: Mapped[str] = mapped_column(String(64), index=True)
     title: Mapped[str] = mapped_column(Text)
-    summary: Mapped[str | None] = mapped_column(Text)        # None, если store_summary=False
+    summary: Mapped[str | None] = mapped_column(Text)       
     author: Mapped[str | None] = mapped_column(String(255))
     published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
     raw_categories: Mapped[str | None] = mapped_column(Text)  # теги ленты через запятую
 
-    # денормализация из Source — чтобы выдача строилась одним запросом
+
     trust_level: Mapped[str] = mapped_column(String(16))
     source_type: Mapped[str] = mapped_column(String(64))
     language: Mapped[str] = mapped_column(String(8))

@@ -1,4 +1,4 @@
-import { CheckIcon } from "../icons";
+import Check from "@iconify-react/bi/check";
 
 type StepState = "pending" | "active" | "done";
 
@@ -7,7 +7,7 @@ export default function StatusStep({ label, state }: { label: string; state: Ste
     <div className="flex items-center gap-2 whitespace-nowrap">
       {state === "done" && (
         <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary text-white">
-          <CheckIcon className="h-3 w-3" />
+          <Check className="h-4 w-4" />
         </span>
       )}
       {state === "active" && (

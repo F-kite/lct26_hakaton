@@ -1,5 +1,6 @@
+import X from "@iconify-react/bi/x";
+
 import type { Signal } from "../../api/types";
-import { CloseIcon } from "../icons";
 
 interface Props {
   signal: Signal;
@@ -11,7 +12,7 @@ export default function ConfidenceModal({ signal, onClose }: Props) {
   const predictors = signal.explanation.key_predictors ?? [];
   const summary =
     signal.status === "included"
-      ? "Вместе эти признаки указывают на раннюю стадию развития — до сформированного рынка и массового внедрения."
+      ? "Вместе эти признаки показывают раннюю стадию развития: интерес к технологии уже растёт, но сформированного рынка и массового внедрения ещё нет."
       : `Модель посчитала эти признаки более характерными для «${signal.explanation.predicted_class ?? "зрелой технологии"}», чем для зарождающегося сигнала.`;
 
   return (
@@ -27,26 +28,26 @@ export default function ConfidenceModal({ signal, onClose }: Props) {
           type="button"
           onClick={onClose}
           aria-label="Закрыть"
-          className="absolute right-5 top-5 text-neutral-400 hover:text-neutral-900"
+          className="absolute right-5 top-5 text-neutral-400 hover:text-neutral-900 hover:cursor-pointer"
         >
-          <CloseIcon />
+          <X className="h-5 w-5" />
         </button>
-        <h3 className="text-xl font-bold text-neutral-950">Как определяется оценка?</h3>
-        <p className="mt-3 text-sm leading-relaxed text-neutral-700">
+        <h3 className="text-2xl font-bold text-neutral-950">Как определяется оценка?</h3>
+        <p className="mt-3 text-sm leading-relaxed text-neutral-600">
           {pct}% — это степень уверенности модели в том, что технология соответствует признакам
           слабого сигнала. Это не оценка качества или зрелости самой технологии.
         </p>
         {predictors.length > 0 && (
           <>
-            <h4 className="mt-5 font-bold text-neutral-950">Что влияет на оценку</h4>
-            <ul className="mt-2 space-y-1 text-sm text-neutral-700">
+            <h4 className="mt-5 text-xl font-bold text-neutral-950">Что влияет на оценку</h4>
+            <ul className="mt-2 space-y-1 text-sm text-neutral-600">
               {predictors.map((p) => (
                 <li key={p}>• {p}</li>
               ))}
             </ul>
           </>
         )}
-        <div className="mt-5 rounded-xl bg-neutral-50 p-4 text-sm text-neutral-600">{summary}</div>
+        <div className="mt-5 rounded-xl bg-neutral-200/20  border-1 border-neutral-300 p-2 text-sm text-neutral-600">{summary}</div>
       </div>
     </div>
   );

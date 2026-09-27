@@ -1,5 +1,5 @@
 """POST /search — открытый запрос → пайплайн → ТОП-15.
-GET /search/{id}/status — прогресс (бонусные счётчики ТЗ) + результат.
+GET /search/{id}/status
 """
 
 from __future__ import annotations

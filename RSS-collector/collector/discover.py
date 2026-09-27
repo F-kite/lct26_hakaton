@@ -1,11 +1,6 @@
-"""Автодискавери RSS-лент.
-
-Две стратегии:
-1. <link rel="alternate" type="application/rss+xml"> в <head> страницы — канонический способ.
-2. Перебор типовых путей (/feed, /rss, /feed.xml, ...) — fallback.
-
-Нужен, когда точный URL ленты неизвестен (например, ВШЭ) или когда сайт
-сменил адрес фида: вместо правки константы запускаем discover.
+"""Автодискавери RSS-лент: <link rel="alternate"> в <head> страницы —
+канонический способ, перебор типовых путей (/feed, /rss, ...) — fallback.
+Когда точный URL ленты неизвестен или сайт сменил адрес фида.
 """
 
 from __future__ import annotations
@@ -68,7 +63,6 @@ def discover(site_url: str, timeout: float = 15.0) -> list[str]:
             except Exception:
                 continue
 
-    # дедуп с сохранением порядка
     seen: set[str] = set()
     ordered = []
     for u in found:

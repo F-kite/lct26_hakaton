@@ -12,8 +12,7 @@
     python -m collector.main arxiv "cat:cs.AI AND abs:agentic" --save
     python -m collector.main semantic-scholar "agentic AI safety" --save
     python -m collector.main verify-doi 10.1038/s41586-021-03819-2
-                                                    # поисковые API — тоже НЕ часть loop,
-                                                    # search_query задаётся явно при каждом вызове
+                                                    # поисковые API, search_query задаётся явно при каждом вызове
 """
 
 from __future__ import annotations
@@ -68,12 +67,6 @@ def cmd_discover(args) -> int:
 
 
 def _split_collect_keys(keys: list[str] | None) -> tuple[list[str], list[str]]:
-    """Явные keys могут смешивать RSS- и HTML/API-источники в одном вызове
-    (collect stanford_hai techcrunch) — разводим по нужному механизму сбора.
-    Без явных keys — все RSS-ленты (rss_pollable) + все HTML/API-источники;
-    поисковые API (arxiv/semantic_scholar) вслепую не опрашиваются, для них
-    нужен конкретный search_query — только через collector.academic.
-    """
     rss_keys = [k for k in (keys or [f.key for f in FEEDS if f.rss_pollable]) if k not in HTML_FETCHERS]
     html_keys = [k for k in (keys or list(HTML_FETCHERS)) if k in HTML_FETCHERS]
     return rss_keys, html_keys
@@ -150,11 +143,8 @@ def cmd_stats(_args) -> int:
 def cmd_archive(args) -> int:
     date_from = date.fromisoformat(args.date_from)
     date_to = date.fromisoformat(args.date_to) if args.date_to else date.today()
-    # без title запись в БД бессмысленна — для sitemap-источников enrich обязателен при --save
     enrich = args.enrich or (args.save and args.key in SITEMAP_SOURCES)
 
-    # save=True -> персистентность пачками по ходу сбора (см. archive.fetch_archive):
-    # один сетевой сбой на середине многочасового прогона больше не теряет всё найденное
     items = fetch_archive(args.key, date_from, date_to, enrich=enrich, save=args.save)
     print(f"[{args.key}] получено за {date_from}..{date_to}: {len(items)}")
     return 0

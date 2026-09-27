@@ -1,13 +1,6 @@
-"""Создать новые таблицы (signals, signal_sources, search_queries) и
-добавить колонки, появившиеся в уже существующих таблицах после первого
-запуска.
-
-sources/feed_items уже существуют (создаёт collector) — create_all их не
-трогает: по умолчанию проверяет наличие таблицы в БД и пропускает, если
-она уже есть. Та же логика верна и для наших таблиц: create_all не делает
-ALTER TABLE для новых колонок на уже существующей таблице (у нас нет
-Alembic/миграций) — поэтому недостающие колонки добавляются здесь вручную,
-идемпотентно (IF NOT EXISTS), при каждом старте контейнера.
+"""Создаёт новые таблицы и добавляет колонки, которых не было при первом
+запуске — create_all не делает ALTER TABLE на существующих таблицах (нет
+Alembic), поэтому недостающие колонки добавляются здесь вручную, идемпотентно.
 """
 
 from sqlalchemy import text
@@ -17,6 +10,7 @@ from .db import Base, engine
 # (таблица, колонка, тип) — то, что появилось после первого create_all
 _EXTRA_COLUMNS = [
     ("signals", "potential_advantage", "TEXT"),
+    ("signals", "problem", "TEXT"),
     ("signals", "status", "VARCHAR(16) DEFAULT 'included'"),
     ("search_queries", "phase", "VARCHAR(32)"),
     ("signal_sources", "is_primary", "BOOLEAN DEFAULT FALSE"),

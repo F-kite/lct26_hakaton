@@ -8,9 +8,6 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 
-# До импорта роутеров: они на импорте тянут pipeline.orchestrator, который
-# грузит модель и логирует это по INFO — если настроить логирование позже,
-# этот лог молча проглатывается дефолтным уровнем root-логгера (WARNING).
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s %(levelname)-7s %(name)s | %(message)s",

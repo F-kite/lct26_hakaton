@@ -29,6 +29,7 @@ def signal_to_out(signal: Signal) -> SignalOut:
         title=signal.title,
         area=signal.area,
         description=signal.description,
+        problem=signal.problem,
         potential_advantage=signal.potential_advantage,
         case_example=signal.case_example,
         stage=signal.stage,

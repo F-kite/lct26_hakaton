@@ -1,21 +1,8 @@
-"""Контракт для ML-модели: что она получает на вход и что обязана вернуть.
-
-Оркестратор (orchestrator.py) работает с Protocol SignalClassifier, не
-с конкретной реализацией — подключить другую модель означает написать
-класс, реализующий .score(), и передать его экземпляр в run_search().
-Остальной пайплайн не меняется.
-
-Единственная реализация — TrainedModelClassifier, обёртка над обученной
-моделью аналитика (sklearn: TF-IDF -> LogisticRegression, см.
-Модель_и_SQL/Методология_и_инструкция.md). Эвристика-заглушка, которая
-была здесь раньше, убрана: она давала кандидатам без валидного текста
-(не EN / пустой summary) оценку, несопоставимую по шкале с реальной
-моделью, и эти "эвристические" результаты систематически вытесняли из
-топ-15 честные оценки модели (эвристика легко давала 0.7-0.95 на свежих
-записях с высоким доверием, модель — более взвешенные 0.3-0.6 даже на
-явных слабых сигналах). Теперь кандидат, для которого нет проверенного
-входа, просто не получает шанс попасть в выдачу (confidence=0.0), а не
-угадывается по суррогатным признакам.
+"""Контракт для ML-модели (Protocol SignalClassifier) — оркестратор не
+знает деталей конкретной реализации. Единственная реализация —
+TrainedModelClassifier (sklearn TF-IDF -> LogisticRegression, см.
+Модель_и_SQL/Методология_и_инструкция.md). Непроверенный вход (не EN /
+пустой summary) получает confidence=0.0, а не суррогатную оценку.
 """
 
 from __future__ import annotations
@@ -41,46 +28,33 @@ class SignalCandidate:
     sources: list[str]        # source_key каждой подтверждающей записи
     trust_levels: list[str]   # high | medium | low, по одной на sources[i]
     published_at: datetime | None
-    language: str = "EN"      # модель обучена и проверена только на EN
+    language: str = "EN"
 
 
 @dataclass
 class ScoringResult:
-    """Выход модели. explanation обязателен — интерпретируемость требует
-    ТЗ (раздел 2: "показывать, по каким признакам..."; критерий 8.3).
+    """Выход модели. explanation обязателен — интерпретируемость сигнала
+    (какие признаки повлияли на оценку).
     """
 
     is_weak_signal: bool
     confidence: float          # 0..1
-    stage: str | None          # модель стадию не определяет — см. TrainedModelClassifier
+    stage: str | None          
     explanation: dict = field(default_factory=dict)
 
 
 class SignalClassifier(Protocol):
-    """Контракт для модели. model_version — ТЗ требует явно логировать,
-    какая модель дала оценку (особенно при выборе из нескольких).
-    """
+    """Контракт для модели."""
 
-    model_version: str
+    model_version: str  # какая модель/версия дала оценку
 
     def score(self, candidate: SignalCandidate) -> ScoringResult: ...
 
-
-# --------------------------------------------------------------------------
-# Обученная модель (Этап 1 ТЗ) — sklearn.Pipeline (TF-IDF -> LogisticRegression),
-# см. Методология_и_инструкция.md от аналитика. 172 обучающих публикации,
-# проверка: 72/76 (94.7%), топ-15 на контрольной выборке — 15/15.
-# --------------------------------------------------------------------------
 
 LABEL_WEAK_SIGNAL = "слабый сигнал"
 LABEL_MATURE = "зрелая технология"
 LABEL_NOISE = "шум"
 
-# Модель проверена только на английском тексте содержательной публикации
-# (заголовок+описание+очищенный текст, без URL, до ~14000 символов) — не на
-# заголовке без текста и не на русском. Ниже этого порога по символам в
-# summary — не "проверенный вход" по формулировке методологии, кандидат
-# исключается из оценки (см. score()), а не угадывается суррогатно.
 MIN_SUMMARY_CHARS = 20
 MAX_MODEL_INPUT_CHARS = 14_000
 
@@ -90,9 +64,7 @@ _WS_RE = re.compile(r"\s+")
 
 
 def _clean_model_input(candidate: SignalCandidate) -> str | None:
-    """Собрать текст в форме, ожидаемой моделью, либо None, если кандидат
-    не подходит (см. MIN_SUMMARY_CHARS) — методология прямо предупреждает
-    не подавать модели заголовок без текста, HTML или русский язык.
+    """Собрать текст в форме, ожидаемой моделью, либо None, если кандидат не подходит.
     """
     if candidate.language != "EN":
         return None
@@ -109,7 +81,7 @@ def _clean_model_input(candidate: SignalCandidate) -> str | None:
 
 
 class TrainedModelClassifier:
-    """Обёртка над обученной моделью аналитика под Protocol SignalClassifier."""
+    """Обёртка над обученной моделью под Protocol SignalClassifier."""
 
     model_version = "trained-tfidf-logreg-v1"
 
@@ -129,8 +101,7 @@ class TrainedModelClassifier:
 
     def _find_steps(self):
         """Найти TF-IDF векторизатор и классификатор внутри pipeline по
-        сигнатуре, а не по жёстко зашитым именам шагов — устойчивее к тому,
-        как именно аналитик назвал шаги при обучении."""
+        сигнатуре."""
         vectorizer = clf = None
         for _, step in self._model.steps:
             if hasattr(step, "get_feature_names_out"):
@@ -145,17 +116,15 @@ class TrainedModelClassifier:
         return vectorizer, clf
 
     def vectorize(self, texts: list[str]):
-        """TF-IDF векторы уже обученного векторизатора — переиспользуется
-        display_grouping.py для похожести кандидатов (не для скоринга)."""
+        """TF-IDF-векторы для текстов — переиспользуется display_grouping.py
+        для косинусной близости между кандидатами."""
         return self._vectorizer.transform(texts)
 
     def explain_features(self, text: str, predicted_class: str, top_k: int = 4) -> list[str]:
         """Топ-K термов текста, сильнее всего повлиявших на предсказанный
-        класс — настоящая word-level интерпретируемость (ТЗ раздел 2:
-        "показывать, по каким признакам..."; критерий 8.3), не хардкод
-        категорий: вес = коэффициент LogisticRegression для класса × вес
-        TF-IDF терма в КОНКРЕТНОМ тексте, берём только термы, реально
-        присутствующие в тексте (ненулевой вклад)."""
+        класс: вес = коэффициент LogisticRegression для класса × вес
+        TF-IDF терма в конкретном тексте, берём только термы с ненулевым
+        вкладом."""
         try:
             class_idx = list(self._clf.classes_).index(predicted_class)
         except ValueError:
@@ -174,10 +143,6 @@ class TrainedModelClassifier:
     def score(self, candidate: SignalCandidate) -> ScoringResult:
         text = _clean_model_input(candidate)
         if text is None:
-            # Не EN или недостаточно текста — не проверенный моделью вход
-            # (см. Методология_и_инструкция.md). confidence=0.0 естественно
-            # не проходит порог SIGNAL_SCORE_THRESHOLD в orchestrator.py —
-            # кандидат просто не попадёт в выдачу, без суррогатной оценки.
             return ScoringResult(
                 is_weak_signal=False,
                 confidence=0.0,
@@ -198,7 +163,7 @@ class TrainedModelClassifier:
         return ScoringResult(
             is_weak_signal=predicted == LABEL_WEAK_SIGNAL,
             confidence=round(float(by_class.get(LABEL_WEAK_SIGNAL, 0.0)), 3),
-            stage=None,  # модель не определяет стадию — только 3 класса, см. методологию
+            stage=None,
             explanation={
                 "predicted_class": predicted,
                 "class_probabilities": {k: round(float(v), 3) for k, v in by_class.items()},

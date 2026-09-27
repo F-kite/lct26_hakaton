@@ -36,14 +36,13 @@ class SignalSourceOut(BaseModel):
 
 
 class SignalOut(BaseModel):
-    # protected_namespaces=() — иначе pydantic ругается на поле model_version
-    # (по умолчанию резервирует префикс "model_" для своих внутренних методов)
     model_config = ConfigDict(from_attributes=True, protected_namespaces=())
 
     id: int
     title: str
     area: str | None
     description: str | None
+    problem: str | None
     potential_advantage: str | None
     case_example: str | None
     stage: str | None

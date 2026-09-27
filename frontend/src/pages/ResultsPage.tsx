@@ -1,10 +1,13 @@
+import BadgeCheckSolid from "@iconify-react/flowbite/badge-check-solid";
+import FileChartBarSolid from "@iconify-react/flowbite/file-chart-bar-solid";
+import FileCheckSolid from "@iconify-react/flowbite/file-check-solid";
+import FileLineSolid from "@iconify-react/flowbite/file-lines-solid";
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
 import { useCreateSearch, useSearchStatus } from "../api/queries";
 import type { Signal } from "../api/types";
 import Logo from "../components/Logo";
-import { BarChartIcon, ChecklistIcon, ReportIcon } from "../components/icons";
 import EmptyState from "../components/results/EmptyState";
 import SignalsTable from "../components/results/SignalsTable";
 import StatCard from "../components/results/StatCard";
@@ -49,10 +52,12 @@ export default function ResultsPage() {
   if (status.status === "running" || status.status === "pending") {
     return (
       <div className="min-h-screen bg-neutral-100">
-        <header className="flex items-center gap-6 px-6 py-6 sm:px-10">
-          <Logo />
-          <div className="flex-1">
-            <SearchInput size="sm" defaultValue={status.query_text} onSubmit={handleNewSearch} />
+        <header className="px-6 pb-3 pt-7 sm:px-10 xl:px-20">
+          <div className="mx-auto flex max-w-360 items-center gap-6">
+            <Logo />
+            <div className="flex-1">
+              <SearchInput size="sm" defaultValue={status.query_text} onSubmit={handleNewSearch} />
+            </div>
           </div>
         </header>
         <SearchProgressModal
@@ -92,10 +97,12 @@ export default function ResultsPage() {
 
   return (
     <div className="animate-fade-in min-h-screen bg-neutral-100 pb-16">
-      <header className="flex flex-col gap-6 px-6 py-6 sm:flex-row sm:items-center sm:px-10">
-        <Logo />
-        <div className="flex-1">
-          <SearchInput size="sm" defaultValue={status.query_text} onSubmit={handleNewSearch} />
+      <header className="mx-auto max-w-360 px-6 pb-8 pt-7 sm:px-10">
+        <div className="mx-auto flex max-w-360 flex-col gap-6 sm:flex-row sm:items-center">
+          <Logo />
+          <div className="flex-1">
+            <SearchInput size="sm" defaultValue={status.query_text} onSubmit={handleNewSearch} />
+          </div>
         </div>
       </header>
 
@@ -106,31 +113,37 @@ export default function ResultsPage() {
 
         <div className="mt-6 flex flex-col gap-4 sm:flex-row">
           <StatCard
-            icon={BarChartIcon}
+            icon={FileChartBarSolid}
             label="Обработано источников"
             value={status.sources_processed}
             hint="Публикации, патенты и отчёты"
           />
           <StatCard
-            icon={ChecklistIcon}
+            icon={FileCheckSolid}
             label="Найдено кандидатов"
             value={status.candidates_found}
             hint="Выявлено при анализе источников"
           />
           <StatCard
-            icon={ReportIcon}
+            icon={FileLineSolid}
             label="Отобрано слабых сигналов"
             value={included.length}
             hint="Лучшие по результатам ранжирования"
           />
+          <StatCard
+            icon={BadgeCheckSolid}
+            label="Высокая уверенность"
+            value={status.signals_above_75}
+            hint="Сигналы с уверенностью модели выше 75%"
+          />
         </div>
 
-        <div className="mt-8 rounded-2xl bg-neutral-50 p-3">
+        <div className="mt-8 rounded-2xl bg-neutral-200 p-3">
           <div className="flex gap-6 border-b border-neutral-200 px-2 pb-3">
             <button
               type="button"
               onClick={() => setTab("included")}
-              className={`border-b-2 pb-1 text-sm font-medium ${
+              className={`border-b-2 pb-1 text-sm font-medium hover:cursor-pointer ${
                 tab === "included"
                   ? "border-link text-link"
                   : "border-transparent text-neutral-900"
@@ -141,7 +154,7 @@ export default function ResultsPage() {
             <button
               type="button"
               onClick={() => setTab("excluded")}
-              className={`border-b-2 pb-1 text-sm font-medium ${
+              className={`border-b-2 pb-1 text-sm font-medium hover:cursor-pointer ${
                 tab === "excluded"
                   ? "border-link text-link"
                   : "border-transparent text-neutral-900"

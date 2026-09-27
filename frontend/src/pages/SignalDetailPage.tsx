@@ -34,10 +34,12 @@ export default function SignalDetailPage() {
 
   return (
     <div className="animate-fade-in min-h-screen bg-neutral-100 pb-16">
-      <header className="flex flex-col gap-6 px-6 py-6 sm:flex-row sm:items-center sm:px-10">
-        <Logo />
-        <div className="flex-1">
-          <SearchInput size="sm" onSubmit={handleNewSearch} />
+      <header className="mx-auto max-w-360 px-6 pb-8 pt-7 sm:px-10">
+        <div className="mx-auto flex max-w-360 flex-col gap-6 sm:flex-row sm:items-center">
+          <Logo />
+          <div className="flex-1">
+            <SearchInput size="sm" onSubmit={handleNewSearch} />
+          </div>
         </div>
       </header>
 
@@ -70,7 +72,7 @@ export default function SignalDetailPage() {
 
               <h3 className="mt-5 font-bold text-neutral-950">Какую проблему решает</h3>
               <p className="mt-2 text-sm leading-relaxed text-neutral-700">
-                {signal.description ?? "Не указано в источнике."}
+                {signal.problem ?? "Не указано в источнике."}
               </p>
 
               <h3 className="mt-5 font-bold text-neutral-950">Потенциальное преимущество</h3>

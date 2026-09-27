@@ -7,10 +7,13 @@ export default function ConfidencePanel({ signal }: { signal: Signal }) {
   const [showModal, setShowModal] = useState(false);
   const pct = Math.round(signal.score * 100);
   const predicted = signal.explanation.predicted_class;
+  const isWeakSignalClass = predicted === "слабый сигнал";
 
   const description =
     signal.status === "excluded"
-      ? `Модель считает технологию «${predicted ?? "не слабым сигналом"}» и не относит её к слабым сигналам.`
+      ? isWeakSignalClass
+        ? `Модель распознала признаки слабого сигнала, но с уверенностью всего ${pct}% — ниже порога, необходимого для попадания в выдачу.`
+        : `Модель отнесла технологию к классу «${predicted ?? "не слабым сигналом"}» и не считает её слабым сигналом.`
       : pct >= 80
         ? "Высокая уверенность в классификации как слабого сигнала."
         : "Умеренная уверенность в классификации как слабого сигнала.";
@@ -29,7 +32,7 @@ export default function ConfidencePanel({ signal }: { signal: Signal }) {
       <button
         type="button"
         onClick={() => setShowModal(true)}
-        className="mt-2 text-sm font-medium text-link hover:text-link-hover"
+        className="mt-2 text-sm font-medium text-link hover:text-link-hover hover:cursor-pointer"
       >
         Как определяется оценка?
       </button>

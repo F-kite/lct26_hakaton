@@ -1,38 +1,4 @@
-"""Архивная догрузка исторических записей — вне глубины RSS.
-
-RSS отдаёт только последние 20-50 записей (пара недель). Для расчёта
-"тренда упоминаний" на горизонте 12-24 месяца этого мало — см. открытый
-вопрос №1 в CONTEXT_LCT2026.md. Этот модуль закрывает разрыв прямым обходом
-архивов источников.
-
-Подключён как отдельная команда `python -m collector.main archive` —
-НЕ часть непрерывного `loop` (backfill разовый, гонять его раз в 30 минут
-вместе с RSS бессмысленно и невежливо к источникам).
-
-Архивная запись пишется в ту же таблицу feed_items той же схемой, что и
-"живой" RSS-сбор в core.py — без отдельного флага. Она физически неотличима
-от записи, которую в свой срок принёс бы RSS: те же источники, те же темы,
-разница только во времени публикации относительно момента сбора. Дедуп —
-тот же UNIQUE(url_hash), так что повторный прогон backfill безопасен.
-
-Два способа получения архива, оба проверены вручную (curl) на реальной разметке:
-
-1. day_archive — постраничный HTML, один HTTP-запрос на один календарный день.
-   hse_science, hse_expertise: /news/archive/{section}/{Y}/{m}/{d}/
-   techcrunch:                 /{Y}/{m}/{d}/
-   Точная дата и структура карточки видны в самой странице дня, доп. запросы
-   на статью не нужны.
-
-2. sitemap — XML sitemap, дата берётся из пути URL / <lastmod>. Заголовок
-   и summary добираются отдельным запросом к странице статьи через
-   OpenGraph-мету (og:title, og:description, article:published_time /
-   og:author) — общий приём, не завязанный на вёрстку конкретного сайта.
-   siliconangle: sitemap.xml -> post-sitemap*.xml, дата в пути URL
-   mit_news:     sitemap.xml -> sitemap.xml?page=N, дата в <lastmod>
-
-mckinsey сознательно не включён: sitemap.xml и robots.txt не отвечают за
-60 секунд (похоже на бот-защиту), архива нет — это подтверждает уже принятое
-в feeds.py решение "только RSS + метаданные, без скрапинга".
+"""Архивная догрузка исторических записей
 """
 
 from __future__ import annotations
@@ -57,13 +23,9 @@ log = logging.getLogger(__name__)
 
 USER_AGENT = "LCT2026-WeakSignals/0.1 (hackathon research collector; archive backfill)"
 REQUEST_TIMEOUT = 20.0
-REQUEST_DELAY = 1.0  # вежливая пауза между запросами при обходе архива
+REQUEST_DELAY = 1.0
 SITEMAP_NS = {"sm": "http://www.sitemaps.org/schemas/sitemap/0.9"}
 
-# TechCrunch публикует не только про технологии (есть politics, media и т.п.).
-# Фильтр применяется на этапе разбора карточки, а не на этапе HTTP-запроса,
-# чтобы не терять данные при ошибке в маппинге категорий — просто расширить
-# набор при необходимости.
 TECHCRUNCH_CATEGORIES = {
     "artificial-intelligence", "robotics", "hardware", "security",
     "fintech", "enterprise", "biotech-health", "climate", "space",
@@ -111,12 +73,6 @@ def _get(
     client: httpx.Client, url: str, *, headers: dict[str, str] | None = None,
 ) -> httpx.Response | None:
     """GET с ретраями на сетевые сбои и 429/5xx.
-
-    Возвращает None вместо исключения: при часовом прогоне backfill
-    единичный обрыв соединения не должен ронять весь уже собранный
-    прогресс (реальный случай — RemoteProtocolError/ReadTimeout на
-    сотом+ запросе к siliconangle/mit_news обрывали процесс целиком).
-    Переиспользуется другими модулями (academic.py) — не только backfill.
     """
     for attempt in range(MAX_RETRIES):
         try:
@@ -145,9 +101,7 @@ def fetch_hse_day(
 ) -> list[ArchiveItem]:
     """Один день архива ВШЭ. section: 'science' | 'expertise'.
 
-    Разметка подтверждена вручную: контейнер записи — div.post, заголовок
-    и ссылка — h2.first_child > a, дата берётся из URL архива (в самой
-    карточке она же продублирована как день/месяц/год, но без времени).
+    Дата берётся из URL архива, а не из карточки (там она без времени).
     """
     url = f"https://www.hse.ru/news/archive/{section}/{day:%Y/%m/%d}/"
     resp = _get(client, url)
@@ -193,10 +147,6 @@ def fetch_techcrunch_day(
     client: httpx.Client, day: date, categories: set[str] | None = TECHCRUNCH_CATEGORIES,
 ) -> list[ArchiveItem]:
     """Один день архива TechCrunch. categories=None -> без фильтрации по теме.
-
-    Разметка подтверждена вручную: карточка — li.wp-block-post с классами
-    category-* прямо на элементе (фильтр по теме без похода в статью),
-    точное время — в time.loop-card__time[datetime] (ISO с таймзоной).
     """
     url = f"https://techcrunch.com/{day:%Y/%m/%d}/"
     resp = _get(client, url)
@@ -338,10 +288,7 @@ def enrich_from_opengraph(
 ) -> ArchiveItem | None:
     """Добрать title/summary/author со страницы статьи через OpenGraph-мету.
 
-    Подтверждено вручную на siliconangle и news.mit.edu — обе площадки отдают
-    og:title/og:description и дату публикации (article:published_time или
-    og:author). Общий метод, не завязан на конкретную вёрстку — не нужно
-    подбирать CSS-селекторы под каждый сайт отдельно.
+    Общий метод, не завязан на конкретную вёрстку сайта.
     """
     resp = _get(client, url)
     if resp is None or resp.status_code != 200:
@@ -384,13 +331,6 @@ def fetch_archive(
     source_key: str, date_from: date, date_to: date, *, enrich: bool = False, save: bool = False,
 ) -> list[ArchiveItem]:
     """Собрать архив одного источника за период.
-
-    save=True — писать в БД пачками по мере сбора, а не только в самом конце.
-    Иначе часовой прогон (sitemap+enrich) при обрыве на середине терял бы
-    весь уже найденный прогресс — так уже случалось на siliconangle/mit_news
-    до того, как здесь появились ретраи и промежуточный flush.
-    Каждый день/URL обёрнут в try/except: один сбой не должен прерывать
-    остальной прогон.
     """
     if source_key in EXCLUDED_SOURCES:
         raise ValueError(f"{source_key}: архив недоступен — {EXCLUDED_SOURCES[source_key]}")
@@ -449,11 +389,6 @@ def fetch_archive(
 
 def persist_items(items: list[ArchiveItem]) -> int:
     """Записать архивные записи в feed_items — той же схемой, что core.collect_one.
-
-    Источник (Source) берётся из feeds.BY_KEY и upsert-ится как при живом
-    сборе, денормализованные поля (trust_level и т.д.) — из того же Feed.
-    Дедуп по UNIQUE(url_hash): повторный прогон по тому же периоду просто
-    ничего не добавит.
     """
     session = SessionLocal()
     new_count = 0
@@ -479,10 +414,6 @@ def persist_items(items: list[ArchiveItem]) -> int:
             if session.scalar(select(FeedItem.id).where(FeedItem.url_hash == h)):
                 continue
 
-            # author — VARCHAR(255); у научных статей (arxiv/semantic_scholar)
-            # бывает 15+ соавторов через запятую, легко превышает лимит
-            # (поймано на реальной статье с 18 авторами) — усекаем здесь,
-            # на границе записи, а не в каждом fetcher'е отдельно
             author = item.author[:255] if item.author else item.author
 
             session.add(FeedItem(
@@ -536,12 +467,11 @@ def main() -> int:
 
     date_from = date.fromisoformat(args.date_from)
     date_to = date.fromisoformat(args.date_to) if args.date_to else date.today()
-    # без title запись в БД бессмысленна — для sitemap-источников enrich обязателен при --save
+   
     enrich = args.enrich or (args.save and args.source_key in SITEMAP_SOURCES)
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)-7s | %(message)s", datefmt="%H:%M:%S")
 
-    # save=True -> персистентность пачками по ходу сбора (см. fetch_archive)
     items = fetch_archive(args.source_key, date_from, date_to, enrich=enrich, save=args.save)
     print(f"\n[{args.source_key}] найдено записей: {len(items)}")
     for it in items[:20]:

@@ -84,10 +84,17 @@ services:
     image: ollama/ollama
     logging: *default-logging
     volumes:
-      # веса модели (~1.9 ГБ на qwen2.5:3b — выбрана вместо 7b)
+      # веса модели (~1.9 ГБ на qwen2.5:3b) — сохраняются в volume, повторный
+      # docker compose up ничего заново не качает
       - ollama_data:/root/.ollama
     ports:
-      - "11434:11434"
+      - "127.0.0.1:11434:11434"
+    entrypoint: ["/bin/sh", "-c"]
+    command: >
+      "ollama serve &
+       sleep 3
+       ollama pull qwen2.5:3b
+       wait"
     restart: unless-stopped
 
 volumes:

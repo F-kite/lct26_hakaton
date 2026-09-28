@@ -77,11 +77,11 @@ export default function SearchHomePage() {
           {STEPS.map(({ label, Icon }) => (
             <div
               key={label}
-              className="flex items-center gap-2 rounded-full bg-neutral-200 pl-4 pr-2 py-2 text-sm text-neutral-700 shadow-sm" 
-            >
+              className="flex items-center gap-2 rounded-full border border-neutral-300 bg-linear-to-br from-neutral-200 to-neutral-100 to-80% pl-5 pr-1 py-2 text-sm text-neutral-700 shadow-sm"                                                                                        
+            >                                                                                               
               {label}
               <span
-                className={`flex h-10 w-10 items-center justify-center rounded-full bg-neutral-100 text-primary`}
+                className={`flex h-10 w-10 items-center justify-center rounded-full bg-white/40 border border-neutral-100 text-primary`}
               >
                 <Icon className="h-6 w-6" />
               </span>

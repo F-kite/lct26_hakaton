@@ -15,7 +15,7 @@ export default function ReasonTags({ signal }: { signal: Signal }) {
 
   return (
     <div className="rounded-2xl bg-neutral-0 p-6 shadow-sm">
-      <h3 className="font-bold text-neutral-950">{heading}</h3>
+      <h3 className="font-bold text-neutral-950  [-webkit-text-stroke:0.4px_currentColor]">{heading}</h3>
       <p className="mt-2 text-sm text-neutral-600">{summary}</p>
       {tags.length > 0 && (
         <div className="mt-4 flex flex-wrap gap-2">

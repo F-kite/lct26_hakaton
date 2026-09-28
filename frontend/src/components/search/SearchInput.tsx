@@ -34,9 +34,7 @@ export default function SearchInput({
   return (
     <form
       onSubmit={handleSubmit}
-      className={`relative flex items-center rounded-full bg-neutral-0 shadow-sm ring-1 transition-shadow ${
-        focused ? "ring-primary/40" : "ring-neutral-300"
-      } ${isLg ? "h-16 pl-6 pr-2" : "h-11 pl-4 pr-1.5"}`}
+      className={`relative flex items-center rounded-full bg-neutral-0 shadow-sm ring-1 transition-shadow ring-neutral-300 ${isLg ? "h-16 pl-6 pr-2" : "h-11 pl-4 pr-1.5"}`}
     >
       <input
         type="text"

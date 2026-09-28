@@ -59,7 +59,7 @@ export default function SignalDetailPage() {
           <div className="space-y-6">
             <div className="rounded-2xl bg-neutral-0 p-6 shadow-sm">
               <div className="flex items-center justify-between">
-                <h3 className="font-bold text-neutral-950">О технологии</h3>
+                <h3 className=" text-neutral-950 [-webkit-text-stroke:0.4px_currentColor]">О технологии</h3>
                 {enriched && (
                   <span className="rounded-full bg-neutral-100 px-2.5 py-1 text-xs text-neutral-500">
                     Резюме сгенерировано ИИ
@@ -70,12 +70,12 @@ export default function SignalDetailPage() {
                 {signal.description ?? "Не указано в источнике."}
               </p>
 
-              <h3 className="mt-5 font-bold text-neutral-950">Какую проблему решает</h3>
+              <h3 className="mt-5 text-neutral-950  [-webkit-text-stroke:0.4px_currentColor]">Какую проблему решает</h3>
               <p className="mt-2 text-sm leading-relaxed text-neutral-700">
                 {signal.problem ?? "Не указано в источнике."}
               </p>
 
-              <h3 className="mt-5 font-bold text-neutral-950">Потенциальное преимущество</h3>
+              <h3 className="mt-5 font-bold text-neutral-950  [-webkit-text-stroke:0.4px_currentColor]">Потенциальное преимущество</h3>
               <p className="mt-2 text-sm leading-relaxed text-neutral-700">
                 {signal.potential_advantage ?? "Не указано в источнике."}
               </p>

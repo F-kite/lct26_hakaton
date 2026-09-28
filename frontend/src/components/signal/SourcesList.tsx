@@ -93,7 +93,7 @@ export default function SourcesList({ sources, enriched }: SourcesListProps) {
   return (
     <div className="rounded-2xl bg-neutral-0 p-6 shadow-sm">
       <div className="flex items-center justify-between">
-        <h3 className="font-bold text-neutral-950">
+        <h3 className="font-bold text-neutral-950  [-webkit-text-stroke:0.4px_currentColor]">
           Источники и подтверждения <span className="text-primary">{sorted.length}</span>
         </h3>
         {!expanded && sorted.length > PREVIEW_COUNT && (

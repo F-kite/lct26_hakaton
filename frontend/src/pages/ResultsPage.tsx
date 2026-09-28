@@ -129,15 +129,9 @@ export default function ResultsPage() {
             value={included.length}
             hint="Лучшие по результатам ранжирования"
           />
-          {/* <StatCard
-            icon={BadgeCheckSolid}
-            label="Высокая уверенность"
-            value={status.signals_above_75}
-            hint="Сигналы с уверенностью модели выше 75%"
-          /> */}
         </div>
 
-        <div className="mt-8 rounded-2xl bg-neutral-200 p-3">
+        <div className="mt-8 rounded-2xl bg-linear-[-190deg] from-neutral-200 to-neutral-100 to-80% p-3 shadow-sm">
           <div className="flex gap-6 border-b border-neutral-200 px-2 pb-3">
             <button
               type="button"

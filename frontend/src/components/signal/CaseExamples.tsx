@@ -11,7 +11,7 @@ export default function CaseExamples({ text, primarySource }: Props) {
 
   return (
     <div className="rounded-2xl bg-neutral-0 p-6 shadow-sm">
-      <h3 className="font-bold text-neutral-950">Где это уже проявилось</h3>
+      <h3 className="font-bold text-neutral-950  [-webkit-text-stroke:0.4px_currentColor]">Где это уже проявилось</h3>
       <p className="mt-3 rounded-xl bg-neutral-50 p-4 text-sm leading-relaxed text-neutral-700">
         {text}
       </p>

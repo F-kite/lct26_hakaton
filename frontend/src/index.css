@@ -26,16 +26,18 @@
   --color-secondary: #556575;
 }
 
-body {
-  margin: 0;
-  font-family: var(--font-sans);
-  background: var(--color-neutral-100);
-  color: var(--color-neutral-900);
-}
+@layer base {
+  body {
+    margin: 0;
+    font-family: var(--font-sans);
+    background: var(--color-neutral-100);
+    color: var(--color-neutral-900);
+  }
 
-h1, h2, h3, h4, h5 {
-  font-family: var(--font-display);
-  font-weight: 700;
+  h1, h2, h3, h4, h5 {
+    font-family: var(--font-display);
+    font-weight: 700;
+  }
 }
 
 @keyframes fade-in {

@@ -1,0 +1,71 @@
+on:
+  pull_request:
+    - workflows: [ci]
+      filter:
+        target_branches: ["main"]
+
+  push:
+    - workflows: [ci]
+      filter:
+        branches: ["main"]
+
+workflows:
+  ci:
+    tasks:
+      - name: backend-check
+        cubes:
+          - name: install-deps
+            image: docker.io/library/python:3.12-slim
+            script:
+              - pip install --no-cache-dir -r backend/requirements.txt
+
+          - name: build-check
+            script:
+              - python -m compileall -q backend/app
+
+      - name: frontend-check
+        cubes:
+          - name: install-deps
+            image: docker.io/library/node:22-alpine
+            script:
+              - cd frontend && npm ci
+
+          - name: lint
+            script:
+              - cd frontend && npm run lint
+
+          - name: build
+            script:
+              - cd frontend && npm run build
+
+      - name: docker-build
+        cubes:
+          - name: setup-buildx
+            action: docker/setup-buildx-action@v3.11.1
+
+          - name: build-backend
+            action: docker/build-push-action@v6.18.0
+            with:
+              context: backend
+              file: backend/Dockerfile
+              platforms: linux/amd64
+              tags: case-11-backend:latest
+              push: false
+
+          - name: build-frontend
+            action: docker/build-push-action@v6.18.0
+            with:
+              context: frontend
+              file: frontend/Dockerfile
+              platforms: linux/amd64
+              tags: case-11-frontend:latest
+              push: false
+
+          - name: build-collector
+            action: docker/build-push-action@v6.18.0
+            with:
+              context: RSS-collector
+              file: RSS-collector/Dockerfile
+              platforms: linux/amd64
+              tags: case-11-collector:latest
+              push: false

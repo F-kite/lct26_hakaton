@@ -5,7 +5,7 @@ import FileCheckSolidIcon from '@iconify-react/flowbite/file-check-solid';
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
-import { useCreateSearch, useSearchStatus } from "../api/queries";
+import { useCancelSearch, useCreateSearch, useSearchStatus } from "../api/queries";
 import Logo from "../components/Logo";
 import SearchInput from "../components/search/SearchInput";
 import SearchProgressModal from "../components/search/SearchProgressModal";
@@ -20,6 +20,7 @@ const STEPS = [
 export default function SearchHomePage() {
   const navigate = useNavigate();
   const createSearch = useCreateSearch();
+  const cancelSearch = useCancelSearch();
 
   const [activeQueryId, setActiveQueryId] = useState<number | null>(null);
   const [queryText, setQueryText] = useState("");
@@ -45,6 +46,9 @@ export default function SearchHomePage() {
   };
 
   const handleConfirmStop = () => {
+    if (activeQueryId !== null) {
+      cancelSearch.mutate(activeQueryId);
+    }
     setPollingEnabled(false);
     setActiveQueryId(null);
     setConfirmingStop(false);

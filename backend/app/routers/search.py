@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from ..db import SearchQuery, SessionLocal
 from ..deps import get_session
-from ..pipeline.orchestrator import run_search
+from ..pipeline.orchestrator import cancel_search, run_search
 from ..presenters import signal_to_out
 from ..schemas import SearchCreatedResponse, SearchRequest, SearchStatusResponse
 
@@ -39,6 +39,14 @@ def create_search(
 
     background_tasks.add_task(_run_search_job, q.id)
     return SearchCreatedResponse(query_id=q.id, status=q.status)
+
+
+@router.post("/search/{query_id}/cancel", status_code=204, response_model=None)
+def cancel_search_endpoint(query_id: int, session: Session = Depends(get_session)) -> None:
+    q = session.get(SearchQuery, query_id)
+    if q is None:
+        raise HTTPException(status_code=404, detail="запрос не найден")
+    cancel_search(query_id)
 
 
 @router.get("/search/{query_id}/status", response_model=SearchStatusResponse)

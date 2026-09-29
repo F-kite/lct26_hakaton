@@ -28,6 +28,12 @@ export function useSearchStatus(queryId: number | null, enabled: boolean) {
   });
 }
 
+export function useCancelSearch() {
+  return useMutation({
+    mutationFn: (queryId: number) => api.post<void>(`/search/${queryId}/cancel`, {}),
+  });
+}
+
 export function useSignalDetail(signalId: number | null) {
   return useQuery({
     queryKey: ["signal", signalId],

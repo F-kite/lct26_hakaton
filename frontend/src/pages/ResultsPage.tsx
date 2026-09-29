@@ -4,7 +4,7 @@ import FileLineSolid from "@iconify-react/flowbite/file-lines-solid";
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
-import { useCreateSearch, useSearchStatus } from "../api/queries";
+import { useCancelSearch, useCreateSearch, useSearchStatus } from "../api/queries";
 import type { Signal } from "../api/types";
 import Logo from "../components/Logo";
 import EmptyState from "../components/results/EmptyState";
@@ -20,6 +20,7 @@ export default function ResultsPage() {
   const { queryId } = useParams<{ queryId: string }>();
   const navigate = useNavigate();
   const createSearch = useCreateSearch();
+  const cancelSearch = useCancelSearch();
   const numericQueryId = queryId ? Number(queryId) : null;
 
   const [pollingEnabled, setPollingEnabled] = useState(true);
@@ -35,6 +36,9 @@ export default function ResultsPage() {
   };
 
   const handleConfirmStop = () => {
+    if (numericQueryId !== null) {
+      cancelSearch.mutate(numericQueryId);
+    }
     setPollingEnabled(false);
     setConfirmingStop(false);
     navigate("/");

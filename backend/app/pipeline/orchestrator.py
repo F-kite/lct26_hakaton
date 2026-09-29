@@ -34,6 +34,26 @@ log = logging.getLogger(__name__)
 
 DEFAULT_CLASSIFIER: SignalClassifier = TrainedModelClassifier(MODEL_PATH)
 
+# In-memory отметка отменённых поисков — run_search() выполняется в том же
+# процессе backend'а (FastAPI BackgroundTasks), поэтому БД/новая колонка
+# не нужны: достаточно обычного set(), видимого обоим — эндпоинту отмены
+# и самому пайплайну.
+_cancelled_queries: set[int] = set()
+
+
+class _SearchCancelled(Exception):
+    """Внутренний сигнал остановки — ловится в run_search() тем же except,
+    что и обычные сбои, но с другим текстом ошибки."""
+
+
+def cancel_search(query_id: int) -> None:
+    _cancelled_queries.add(query_id)
+
+
+def _check_cancelled(query_id: int) -> None:
+    if query_id in _cancelled_queries:
+        raise _SearchCancelled()
+
 
 def _feed_item_to_candidate(item: FeedItem) -> SignalCandidate:
     return SignalCandidate(
@@ -105,7 +125,9 @@ def run_search(
     session: Session, query_id: int, classifier: SignalClassifier = DEFAULT_CLASSIFIER,
 ) -> None:
     """Исключения ловятся здесь и пишутся в SearchQuery.error. Отмена —
-    только на фронте (прекращение поллинга), пайплайн доходит до конца.
+    кооперативная: cancel_search() ставит отметку, а пайплайн сам проверяет
+    её в нескольких точках (перед live-поиском и перед каждым LLM-вызовом)
+    и останавливается, откатывая ещё не закоммиченные сигналы этого прогона.
     """
     q = session.get(SearchQuery, query_id)
     if q is None:
@@ -117,6 +139,8 @@ def run_search(
     session.commit()
 
     try:
+        _check_cancelled(query_id)
+
         search_query_text = q.query_text
         if _detect_language(q.query_text) != "EN" and enrichment_available():
             with httpx.Client() as translate_client:
@@ -166,12 +190,14 @@ def run_search(
 
         with httpx.Client() as llm_client:
             for group in top_groups:
+                _check_cancelled(query_id)
                 _persist_signal(
                     session, q, group.representative, group.result,
                     feed_item_ids=group.feed_item_ids, status="included",
                     classifier=classifier, llm_client=llm_client,
                 )
             for candidate, result in rejected:
+                _check_cancelled(query_id)
                 _persist_signal(
                     session, q, candidate, result,
                     feed_item_ids=candidate.feed_item_ids, status="excluded",
@@ -188,7 +214,16 @@ def run_search(
         q = session.get(SearchQuery, query_id)
         if q is not None:
             q.status = "failed"
-            q.error = str(exc)[:1000]
+            q.error = (
+                "Поиск остановлен пользователем" if isinstance(exc, _SearchCancelled)
+                else str(exc)[:1000]
+            )
             q.finished_at = datetime.now(timezone.utc)
             session.commit()
-        log.error("пайплайн упал для query_id=%s: %s", query_id, exc)
+        if isinstance(exc, _SearchCancelled):
+            log.info("поиск query_id=%s остановлен пользователем", query_id)
+        else:
+            log.error("пайплайн упал для query_id=%s: %s", query_id, exc)
+
+    finally:
+        _cancelled_queries.discard(query_id)

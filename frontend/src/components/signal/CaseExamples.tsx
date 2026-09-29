@@ -6,14 +6,21 @@ interface Props {
   primarySource: SignalSource | null;
 }
 
+// LLM пишет эту фразу буквально в текст case_example, когда в источнике нет факта применения технологии
+const NOT_FOUND_RE = /^не указано в источнике\.?$/i;
+
 export default function CaseExamples({ text, primarySource }: Props) {
   if (!text) return null;
+
+  const displayText = NOT_FOUND_RE.test(text.trim())
+    ? "В найденных источниках применение не подтверждено."
+    : text;
 
   return (
     <div className="rounded-2xl bg-neutral-0 p-6 shadow-sm">
       <h3 className="font-bold text-neutral-950  [-webkit-text-stroke:0.4px_currentColor]">Где это уже проявилось</h3>
       <p className="mt-3 rounded-xl bg-neutral-50 p-4 text-sm leading-relaxed text-neutral-700">
-        {text}
+        {displayText}
       </p>
       {primarySource && (
         <p className="mt-2 text-xs text-neutral-500">

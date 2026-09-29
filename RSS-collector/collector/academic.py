@@ -3,7 +3,6 @@ from __future__ import annotations
 import logging
 import os
 import re
-import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from urllib.parse import urlencode
@@ -11,7 +10,7 @@ from xml.etree import ElementTree
 
 import httpx
 
-from .archive import ArchiveItem, REQUEST_TIMEOUT, _get, persist_items
+from .archive import REQUEST_TIMEOUT, ArchiveItem, _get, persist_items
 
 log = logging.getLogger(__name__)
 
@@ -249,7 +248,6 @@ def run_verify_doi(doi: str) -> CrossrefWork | None:
 
 def main() -> int:
     import argparse
-    import sys
 
     p = argparse.ArgumentParser(
         prog="python -m collector.academic",

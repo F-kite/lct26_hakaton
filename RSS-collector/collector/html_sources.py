@@ -195,7 +195,6 @@ def collect_html_sources(keys: list[str] | None = None) -> dict[str, int]:
 
 def main() -> int:
     import argparse
-    import sys
 
     p = argparse.ArgumentParser(prog="python -m collector.html_sources")
     p.add_argument("keys", nargs="*", help=f"по умолчанию — все: {', '.join(FETCHERS)}")

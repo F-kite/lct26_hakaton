@@ -6,10 +6,24 @@ from __future__ import annotations
 from datetime import datetime
 
 from sqlalchemy import (
-    Boolean, DateTime, Float, ForeignKey, Integer, String, Text, create_engine, func,
+    Boolean,
+    DateTime,
+    Float,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+    create_engine,
+    func,
 )
 from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship, sessionmaker
+from sqlalchemy.orm import (
+    DeclarativeBase,
+    Mapped,
+    mapped_column,
+    relationship,
+    sessionmaker,
+)
 
 from .config import DATABASE_URL
 
@@ -91,7 +105,7 @@ class SearchQuery(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
-    signals: Mapped[list["Signal"]] = relationship(back_populates="query")
+    signals: Mapped[list[Signal]] = relationship(back_populates="query")
 
 
 class Signal(Base):
@@ -120,7 +134,7 @@ class Signal(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     query: Mapped[SearchQuery | None] = relationship(back_populates="signals")
-    sources: Mapped[list["SignalSource"]] = relationship(back_populates="signal")
+    sources: Mapped[list[SignalSource]] = relationship(back_populates="signal")
 
 
 class SignalSource(Base):

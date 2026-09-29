@@ -19,7 +19,13 @@ from ..config import (
 )
 from ..db import FeedItem, SearchQuery, Signal, SignalSource
 from .candidates import find_candidates
-from .classifier import LABEL_MATURE, ScoringResult, SignalCandidate, SignalClassifier, TrainedModelClassifier
+from .classifier import (
+    LABEL_MATURE,
+    ScoringResult,
+    SignalCandidate,
+    SignalClassifier,
+    TrainedModelClassifier,
+)
 from .display_grouping import group_for_display
 from .enrichment import enrich_signal, enrichment_available, translate_query_to_english
 from .live_sources import _detect_language, fetch_all_live, persist_live_items

@@ -6,10 +6,23 @@ import os
 from datetime import datetime
 
 from sqlalchemy import (
-    Boolean, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint,
-    create_engine, func,
+    Boolean,
+    DateTime,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+    create_engine,
+    func,
 )
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship, sessionmaker
+from sqlalchemy.orm import (
+    DeclarativeBase,
+    Mapped,
+    mapped_column,
+    relationship,
+    sessionmaker,
+)
 
 DATABASE_URL = os.getenv(
     "DATABASE_URL",
@@ -48,7 +61,7 @@ class Source(Base):
     consecutive_failures: Mapped[int] = mapped_column(Integer, default=0)
     last_error: Mapped[str | None] = mapped_column(Text)
 
-    items: Mapped[list["FeedItem"]] = relationship(back_populates="source")
+    items: Mapped[list[FeedItem]] = relationship(back_populates="source")
 
 
 class FeedItem(Base):

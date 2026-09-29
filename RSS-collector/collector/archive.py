@@ -447,7 +447,6 @@ def persist_items(items: list[ArchiveItem]) -> int:
 
 def main() -> int:
     import argparse
-    import sys
 
     all_keys = sorted(set(DAY_ARCHIVE_SOURCES) | set(SITEMAP_SOURCES))
     p = argparse.ArgumentParser(

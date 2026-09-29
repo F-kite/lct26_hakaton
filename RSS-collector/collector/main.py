@@ -31,7 +31,8 @@ from .core import collect_all
 from .db import FeedItem, SessionLocal, Source, init_db
 from .discover import discover
 from .feeds import BY_KEY, FEEDS
-from .html_sources import FETCHERS as HTML_FETCHERS, collect_html_sources
+from .html_sources import FETCHERS as HTML_FETCHERS
+from .html_sources import collect_html_sources
 
 
 def setup_logging(verbose: bool = False) -> None:

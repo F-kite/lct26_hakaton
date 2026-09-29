@@ -66,8 +66,8 @@ export default function SearchHomePage() {
       )}
 
       <main className="mx-auto flex w-full max-w-4xl flex-1 flex-col items-center justify-center px-6 text-center">
-        <h1 className="text-4xl font-bold text-neutral-950 sm:text-5xl">Что хотите исследовать?</h1>
-        <p className="mt-3 text-neutral-500">Введите технологическое направление</p>
+        <h1 className="text-5xl font-bold text-neutral-950 sm:text-5xl">Что хотите исследовать?</h1>
+        <p className="mt-3 text-xl text-neutral-500">Введите технологическое направление</p>
 
         <div className="mt-8 w-full">
           <SearchInput size="lg" onSubmit={handleSubmit} />
@@ -77,7 +77,7 @@ export default function SearchHomePage() {
           {STEPS.map(({ label, Icon }) => (
             <div
               key={label}
-              className="flex items-center gap-2 rounded-full border border-neutral-300 bg-linear-to-br from-neutral-200 to-neutral-100 to-80% pl-5 pr-1 py-2 text-sm text-neutral-700 shadow-sm"                                                                                        
+              className="flex items-center gap-2 rounded-full border border-neutral-300 bg-linear-to-br from-neutral-200 to-neutral-100 to-80% pl-5 pr-1 py-2 text-base whitespace-nowrap text-neutral-700 shadow-sm shrink-0"                                                                                        
             >                                                                                               
               {label}
               <span

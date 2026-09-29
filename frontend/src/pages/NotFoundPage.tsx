@@ -16,7 +16,7 @@ export default function NotFoundPage() {
         </p>
         <Link
           to="/"
-          className="mt-7 rounded-full bg-primary px-8 py-3 text-md text-white hover:bg-link-hover"
+          className="mt-7 rounded-full bg-primary px-8 py-3 text-base text-white hover:bg-link-hover"
         >
           На главную
         </Link>

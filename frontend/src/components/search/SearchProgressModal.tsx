@@ -21,8 +21,8 @@ export default function SearchProgressModal({ queryText, phase, onStopClick }: P
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center bg-neutral-950/30 backdrop-blur-sm">
       <div className="animate-fade-in mx-4 w-full max-w-2xl rounded-2xl bg-neutral-0 p-8 text-center shadow-xl">
-        <h2 className="text-2xl font-bold text-neutral-950">{queryText}</h2>
-        <p className="mx-auto mt-3 max-w-md text-sm text-neutral-600">
+        <h2 className="text-[32px] font-bold text-neutral-950">{queryText}</h2>
+        <p className="mx-auto mt-3 max-w-md text-base text-neutral-600">
           Сопоставляем независимые источники и проверяем, какие технологии находятся на ранней
           стадии развития.
         </p>

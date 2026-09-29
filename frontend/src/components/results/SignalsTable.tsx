@@ -47,7 +47,7 @@ export default function SignalsTable({ signals, mode, onRowClick }: Props) {
               key={signal.id}
               className="border-b border-neutral-100 bg-neutral-0 last:border-b-0"
             >
-              <td className="px-5 py-5 text-neutral-950 font-display text-md font-bold">{String(i + 1).padStart(2, "0")}</td>
+              <td className="px-5 py-5 text-neutral-950 font-display text-base font-bold">{String(i + 1).padStart(2, "0")}</td>
               <td className="max-w-xs truncate px-4 py-5 font-medium text-neutral-900">
                 {signal.title}
               </td>

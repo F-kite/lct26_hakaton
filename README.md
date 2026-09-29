@@ -86,6 +86,23 @@ GITHUB_TOKEN=ghp_xxx docker compose up -d --build
    кейс-пример, источники с датой/типом/языком/уровнем доверенности,
    объяснение уверенности модели
 
+## Деплой на сервер (публичный доступ)
+
+По умолчанию все порты (`5174`/`9000`/`11434`/`5432`) привязаны к `127.0.0.1` —
+доступны только с той же машины. Для публичного доступа нужен reverse-proxy
+перед контейнерами; готовая автоматизация — в [`deploy/`](deploy/):
+
+```bash
+sudo bash deploy/setup-server.sh
+```
+
+Ставит nginx (единая точка входа: `/` → frontend, `/api/` → backend),
+настраивает ufw, поднимает стек через `docker compose`, включает HTTPS через
+certbot (если DNS домена/`sslip.io`-адреса уже указывает на сервер). Домен
+задаётся в `deploy/nginx/signals.conf` и в `deploy/setup-server.sh`
+(переменная `DOMAIN`); фронтенду нужен `.env` с `VITE_API_BASE_URL=/api`
+(шаблон — [`.env.production.example`](.env.production.example)).
+
 ## Остановка
 
 ```bash

@@ -35,4 +35,4 @@ MODEL_PATH = os.getenv("MODEL_PATH", "app/models/signal_classifier.pkl")
 
 # Локальная модель (Qwen2.5 Ollama)
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
-OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen2.5:7b")
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen2.5:3b")

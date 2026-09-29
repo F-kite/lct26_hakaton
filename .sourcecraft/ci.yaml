@@ -20,6 +20,7 @@ workflows:
               - pip install --no-cache-dir -r backend/requirements.txt
 
           - name: build-check
+            image: docker.io/library/python:3.12-slim
             script:
               - python -m compileall -q backend/app
 
@@ -28,13 +29,16 @@ workflows:
           - name: install-deps
             image: docker.io/library/node:22-alpine
             script:
+              - apk add --no-cache git
               - cd frontend && npm ci
 
           - name: lint
+            image: docker.io/library/node:22-alpine 
             script:
               - cd frontend && npm run lint
 
           - name: build
+            image: docker.io/library/node:22-alpine 
             script:
               - cd frontend && npm run build
 

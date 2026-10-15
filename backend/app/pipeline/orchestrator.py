@@ -27,7 +27,8 @@ from .classifier import (
     TrainedModelClassifier,
 )
 from .display_grouping import group_for_display
-from .enrichment import enrich_signal, enrichment_available, translate_query_to_english
+from .enrichment import enrichment_available, translate_query_to_english
+from .enrichment_service import enrich_cached
 from .live_sources import _detect_language, fetch_all_live, persist_live_items
 
 log = logging.getLogger(__name__)
@@ -89,8 +90,14 @@ def _persist_signal(
     status: str,
     classifier: SignalClassifier,
     llm_client: httpx.Client,
+    allow_llm: bool = True,
 ) -> None:
-    enrichment = enrich_signal(llm_client, candidate.title, candidate.summary or "")
+    # Исключённые при поиске обогащаются только из кэша (бесплатно);
+    # недостающее досчитывается лениво при открытии карточки.
+    enrichment = enrich_cached(
+        session, llm_client, candidate.feed_item_ids[0],
+        candidate.title, candidate.summary or "", allow_llm=allow_llm,
+    )
 
     explanation = dict(result.explanation)
     if enrichment is not None:
@@ -201,7 +208,7 @@ def run_search(
                 _persist_signal(
                     session, q, candidate, result,
                     feed_item_ids=candidate.feed_item_ids, status="excluded",
-                    classifier=classifier, llm_client=llm_client,
+                    classifier=classifier, llm_client=llm_client, allow_llm=False,
                 )
 
         q.status = "done"

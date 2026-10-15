@@ -8,6 +8,7 @@ import hashlib
 import logging
 import re
 import time
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from urllib.parse import urlencode
@@ -402,7 +403,11 @@ LIVE_SOURCE_META: dict[str, dict[str, str]] = {
 
 
 def fetch_all_live(query: str) -> list[LiveItem]:
-    """Опросить все живые источники. Падение одного не должно ронять остальные."""
+    """Опросить все живые источники параллельно — они независимы, и время
+    фазы определяет самый медленный, а не сумма (retry на 429 у одного
+    источника не задерживает остальные). Падение одного не роняет остальные.
+    Порядок результатов — как в списке fetchers (httpx.Client потокобезопасен).
+    """
     fetchers = [
         ("arxiv", fetch_arxiv_live),
         ("semantic_scholar", fetch_semantic_scholar_live),
@@ -411,16 +416,23 @@ def fetch_all_live(query: str) -> list[LiveItem]:
         ("github", fetch_github_live),
         ("hackernews", fetch_hackernews_live),
     ]
-    items: list[LiveItem] = []
+
     with _client() as client:
-        for key, fn in fetchers:
+
+        def run(entry) -> list[LiveItem]:
+            key, fn = entry
             try:
                 found = fn(client, query)
-                items.extend(found)
                 log.info("[%s] live-поиск: %d записей", key, len(found))
+                return found
             except Exception as exc:
                 log.error("[%s] live-поиск упал: %s", key, exc)
-    return items
+                return []
+
+        with ThreadPoolExecutor(max_workers=len(fetchers)) as pool:
+            results = list(pool.map(run, fetchers))
+
+    return [item for found in results for item in found]
 
 
 _CYRILLIC_RE = re.compile(r"[а-яА-ЯёЁ]")

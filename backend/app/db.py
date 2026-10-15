@@ -150,5 +150,22 @@ class SignalSource(Base):
     feed_item: Mapped[FeedItem] = relationship()
 
 
+class SignalEnrichment(Base):
+    """Кэш LLM-обогащения по feed_item_id: один и тот же материал может
+    попадать в сигналы разных запросов — повторно LLM не вызываем.
+    model нужна, чтобы смена модели не отдавала устаревший текст.
+    """
+
+    __tablename__ = "signal_enrichments"
+
+    feed_item_id: Mapped[int] = mapped_column(ForeignKey("feed_items.id"), primary_key=True)
+    model: Mapped[str] = mapped_column(String(64))
+    description: Mapped[str | None] = mapped_column(Text)
+    problem: Mapped[str | None] = mapped_column(Text)
+    potential_advantage: Mapped[str | None] = mapped_column(Text)
+    case_example: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
 engine = create_engine(DATABASE_URL, pool_pre_ping=True, future=True)
 SessionLocal = sessionmaker(bind=engine, expire_on_commit=False, future=True)

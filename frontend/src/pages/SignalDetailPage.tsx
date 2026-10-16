@@ -51,17 +51,17 @@ export default function SignalDetailPage() {
           ]}
         />
 
-        <div className="mt-4 rounded-2xl bg-neutral-0 p-8 shadow-sm">
-          <h1 className="text-3xl font-bold text-link">{signal.title}</h1>
+        <div className="mt-4 rounded-xl p-5 glass-card glass-border-8">
+          <h1 className="text-5xl font-bold text-link">{signal.title}</h1>
         </div>
 
-        <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-[1fr_320px]">
-          <div className="space-y-6">
-            <div className="rounded-2xl bg-neutral-0 p-6 shadow-sm">
+        <div className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-[1fr_320px]">
+          <div className="space-y-4">
+            <div className="rounded-xl p-5 glass-card glass-border-8">
               <div className="flex items-center justify-between">
                 <h3 className=" text-neutral-950 [-webkit-text-stroke:0.4px_currentColor]">О технологии</h3>
                 {enriched && (
-                  <span className="rounded-full bg-neutral-100 px-2.5 py-1 text-xs text-neutral-500">
+                  <span className="rounded-md bg-neutral-50 px-2.5 py-1 text-xs text-neutral-600">
                     Резюме сгенерировано ИИ
                   </span>
                 )}
@@ -83,7 +83,7 @@ export default function SignalDetailPage() {
 
             <ReasonTags signal={signal} />
             <CaseExamples text={signal.case_example} primarySource={primarySource} />
-            <SourcesList sources={signal.sources} enriched={enriched} />
+            <SourcesList sources={signal.sources} />
           </div>
 
           <div>

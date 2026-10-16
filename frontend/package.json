@@ -12,6 +12,7 @@
   "dependencies": {
     "@iconify-react/bi": "gitlab:iconify-icons/react#bi",
     "@iconify-react/carbon": "gitlab:iconify-icons/react#carbon",
+    "@iconify-react/ep": "gitlab:iconify-icons/react#ep",
     "@iconify-react/famicons": "gitlab:iconify-icons/react#famicons",
     "@iconify-react/flowbite": "gitlab:iconify-icons/react#flowbite",
     "@tanstack/react-query": "^5.103.2",

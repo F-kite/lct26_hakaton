@@ -22,7 +22,11 @@
   --color-neutral-600: #6f7985;
   --color-neutral-900: #242429;
   --color-neutral-950: #0f0f0f;
-  --color-muted: #688499;
+  --color-muted: #6b8499;
+  --color-muted-15: color-mix(in oklab, var(--color-muted) 15%, transparent);
+  --color-black-alpha: color-mix(in oklab, #000000 35%, transparent);
+  --color-glass-top: #eaeaeb;
+  --color-glass-bottom: #f7f7f8;
   --color-secondary: #556575;
 }
 
@@ -34,7 +38,11 @@
     color: var(--color-neutral-900);
   }
 
-  h1, h2, h3, h4, h5 {
+  h1,
+  h2,
+  h3,
+  h4,
+  h5 {
     font-family: var(--font-display);
     font-weight: 700;
   }
@@ -46,6 +54,7 @@
     transform: scale(0.96);
     filter: blur(4px);
   }
+
   to {
     opacity: 1;
     transform: scale(1);
@@ -60,5 +69,59 @@
 @media (prefers-reduced-motion: reduce) {
   .animate-fade-in {
     animation: none;
+  }
+}
+
+/* Толщина рамки glass-* задаётся классом glass-border-<px> (glass-border-2)
+   или glass-border-[3px]; без него — 1px */
+@utility glass-border-* {
+  --glass-border: calc(--value(integer) * 1px);
+  --glass-border: --value([length]);
+}
+
+/* Цвета можно переопределить: [--glass-from:#..] [--glass-via:#..] [--glass-to:#..] [--glass-line:#..] */
+/* glass : диагональная заливка (слева-сверху темнее, справа-снизу светлее
+   фона страницы) + рамка 1px + едва заметная тень под краем, как в макете */
+@utility glass-element {
+  background-image: linear-gradient(
+    to bottom right,
+    var(--glass-from, var(--color-glass-top)),
+    var(--glass-via, var(--color-neutral-100)) 35%,
+    var(--glass-to, var(--color-glass-bottom))
+  );
+  border: var(--glass-border, 1px) solid var(--glass-line, var(--color-neutral-300));
+  box-shadow: 0 1px 0 rgb(0 0 0 / 0.025);
+}
+
+/* glass : полупрозрачная рамка вокруг белой карточки (модалки). Фон страницы
+   просвечивает и размыт; толщину рамки задаёт padding элемента (p-3) */
+@utility glass-frame {
+  background: color-mix(in oklab, var(--color-neutral-0) 5%, transparent);
+  backdrop-filter: blur(3px) saturate(1.3);
+  border: 1px solid rgb(255 255 255 / 0.55);
+  box-shadow:
+    0 0 0 1px rgb(0 0 0 / 0.06),
+    0 8px 32px rgb(0 0 0 / 0.12),
+    inset 0 1px 0 rgb(255 255 255 / 0.6);
+}
+
+/* glass : градиентная обводка. Заливку внутри задаёт [--glass-fill:var(--color-primary-50)].
+   Белая часть — отдельный слой ::before с тем же
+   радиусом (inherit), поэтому rounded-* задаёт и внешний, и внутренний радиус
+   независимо от толщины рамки (CSS border давал бы радиус минус толщина) */
+@utility glass-card {
+  position: relative;
+  isolation: isolate;
+  border: var(--glass-border, 1px) solid transparent;
+  background: linear-gradient(to bottom, var(--color-glass-top), var(--color-glass-bottom)) border-box;
+  box-shadow: 0 0 0 1px var(--color-neutral-300);
+
+  &::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    border-radius: inherit;
+    background: var(--glass-fill, var(--color-neutral-0));
   }
 }

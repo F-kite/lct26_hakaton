@@ -12,7 +12,6 @@ import SignalsTable from "../components/results/SignalsTable";
 import StatCard from "../components/results/StatCard";
 import SearchInput from "../components/search/SearchInput";
 import SearchProgressModal from "../components/search/SearchProgressModal";
-import StopConfirmModal from "../components/search/StopConfirmModal";
 
 type Tab = "included" | "excluded";
 
@@ -24,7 +23,6 @@ export default function ResultsPage() {
   const numericQueryId = queryId ? Number(queryId) : null;
 
   const [pollingEnabled, setPollingEnabled] = useState(true);
-  const [confirmingStop, setConfirmingStop] = useState(false);
   const [tab, setTab] = useState<Tab>("included");
 
   const { data: status } = useSearchStatus(numericQueryId, pollingEnabled);
@@ -40,7 +38,6 @@ export default function ResultsPage() {
       cancelSearch.mutate(numericQueryId);
     }
     setPollingEnabled(false);
-    setConfirmingStop(false);
     navigate("/");
   };
 
@@ -66,11 +63,8 @@ export default function ResultsPage() {
         <SearchProgressModal
           queryText={status.query_text}
           phase={status.phase ?? "collecting"}
-          onStopClick={() => setConfirmingStop(true)}
+          onStopConfirm={handleConfirmStop}
         />
-        {confirmingStop && (
-          <StopConfirmModal onConfirm={handleConfirmStop} onCancel={() => setConfirmingStop(false)} />
-        )}
       </div>
     );
   }
@@ -101,20 +95,20 @@ export default function ResultsPage() {
   return (
     <div className="animate-fade-in min-h-screen bg-neutral-100 pb-16">
       <header className="mx-auto max-w-360 px-6 pb-8 pt-7 sm:px-10">
-        <div className="mx-auto flex max-w-360 flex-col gap-6 sm:flex-row sm:items-center">
+        <div className="mx-auto flex max-w-360 flex-col gap-6 sm:flex-row sm:justify-between">
           <Logo />
-          <div className="flex-1">
+          <div className="min-w-215 ">
             <SearchInput size="sm" defaultValue={status.query_text} onSubmit={handleNewSearch} />
           </div>
         </div>
       </header>
 
-      <main className="mx-auto max-w-360 px-6 sm:px-10">
-        <h1 className="text-3xl font-bold text-neutral-950">
+      <main className="mx-auto mt-8 max-w-360 px-6 sm:px-10">
+        <h1 className="text-4xl font-bold text-neutral-950">
           Слабые сигналы в {status.query_text}
         </h1>
 
-        <div className="mt-6 flex flex-col gap-4 sm:flex-row">
+        <div className="mt-8 flex flex-col gap-4 sm:flex-row">
           <StatCard
             icon={FileChartBarSolid}
             label="Обработано источников"
@@ -135,40 +129,37 @@ export default function ResultsPage() {
           />
         </div>
 
-        <div className="mt-8 rounded-2xl bg-linear-[-190deg] from-neutral-200 to-neutral-100 to-80% p-3 shadow-sm">
-          <div className="flex gap-6 border-b border-neutral-200 px-2 pb-3">
-            <button
-              type="button"
-              onClick={() => setTab("included")}
-              className={`border-b-2 pb-1 text-sm font-medium hover:cursor-pointer ${
-                tab === "included"
+        <div className="glass-element mt-4 rounded-xl p-3">
+          {activeList.length !== 0 && (
+            <div className="flex gap-6 border-b border-neutral-200 px-2 pb-3">
+              <button
+                type="button"
+                onClick={() => setTab("included")}
+                className={`border-b-2 pb-1 text-sm font-medium hover:cursor-pointer ${tab === "included"
                   ? "border-link text-link"
                   : "border-transparent text-neutral-900"
-              }`}
-            >
-              Слабые сигналы <span className={tab === "included" ? "" : "text-neutral-500"}>{included.length}</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setTab("excluded")}
-              className={`border-b-2 pb-1 text-sm font-medium hover:cursor-pointer ${
-                tab === "excluded"
+                  }`}
+              >
+                Слабые сигналы <span className={tab === "included" ? "" : "text-neutral-500"}>{included.length}</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setTab("excluded")}
+                className={`border-b-2 pb-1 text-sm font-medium hover:cursor-pointer ${tab === "excluded"
                   ? "border-link text-link"
                   : "border-transparent text-neutral-900"
-              }`}
-            >
-              Исключённые <span className={tab === "excluded" ? "" : "text-neutral-500"}>{excluded.length}</span>
-            </button>
-          </div>
+                  }`}
+              >
+                Исключённые <span className={tab === "excluded" ? "" : "text-neutral-500"}>{excluded.length}</span>
+              </button>
+            </div>
+          )
+          }
 
           {activeList.length === 0 ? (
-            tab === "included" ? (
+            <div className="overflow-hidden rounded-xl bg-neutral-0">
               <EmptyState queryText={status.query_text} onChangeQuery={() => navigate("/")} />
-            ) : (
-              <div className="rounded-2xl bg-neutral-0 p-10 text-center text-sm text-neutral-500">
-                Исключённых кандидатов нет.
-              </div>
-            )
+            </div>
           ) : (
             <div className="overflow-hidden rounded-2xl bg-neutral-0">
               <SignalsTable signals={activeList} mode={tab} onRowClick={goToSignal} />

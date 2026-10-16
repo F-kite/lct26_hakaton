@@ -19,20 +19,20 @@ export default function ConfidencePanel({ signal }: { signal: Signal }) {
         : "Умеренная уверенность в классификации как слабого сигнала.";
 
   return (
-    <div className="sticky top-6 rounded-2xl bg-primary-50 p-5">
+    <div className="sticky top-6 rounded-xl p-5 glass-card glass-border-8 [--glass-fill:var(--color-primary-50)]">
       <div className="text-sm text-neutral-700">Уверенность модели</div>
-      <div className="mt-1 font-display text-4xl font-bold text-neutral-950">{pct}%</div>
-      <div className="mt-3 h-2 overflow-hidden rounded-full bg-neutral-0">
+      <div className="mt-4 font-display text-4xl font-bold text-neutral-950">{pct}%</div>
+      <div className="mt-4 h-2 overflow-hidden rounded-full bg-neutral-0">
         <div
           className={`h-full ${signal.status === "included" ? "bg-success" : "bg-error"}`}
           style={{ width: `${pct}%` }}
         />
       </div>
-      <p className="mt-3 text-sm text-neutral-600">{description}</p>
+      <p className="mt-3 text-sm text-neutral-950">{description}</p>
       <button
         type="button"
         onClick={() => setShowModal(true)}
-        className="mt-2 text-sm font-medium text-link hover:text-link-hover hover:cursor-pointer"
+        className="mt-4 text-sm font-medium text-link hover:text-link-hover hover:cursor-pointer"
       >
         Как определяется оценка?
       </button>

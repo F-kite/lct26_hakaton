@@ -1,4 +1,4 @@
-import ArrowRight from "@iconify-react/bi/arrow-right";
+import ArrowRightBoldIcon from '@iconify-react/ep/arrow-right-bold';
 import Search from "@iconify-react/famicons/search";
 import X from "@iconify-react/bi/x";
 import { useState } from "react";
@@ -29,12 +29,12 @@ export default function SearchInput({
   const hasValue = value.length > 0;
   const showClear = !focused && hasValue;
   const showMutedArrow = focused && !hasValue;
-  const buttonSize = isLg ? "h-12 w-12" : "h-8 w-8";
+  const buttonSize = "h-12 w-12";
 
   return (
     <form
       onSubmit={handleSubmit}
-      className={`relative flex items-center rounded-full bg-neutral-0 shadow-sm ring-1 transition-shadow ring-neutral-300 ${isLg ? "h-16 pl-6 pr-2" : "h-11 pl-4 pr-1.5"}`}
+      className={`relative flex items-center rounded-full transition-shadow  glass-card glass-border-[4.5px] h-16 pl-6 pr-2`} 
     >
       <input
         type="text"
@@ -43,8 +43,8 @@ export default function SearchInput({
         onChange={(e) => setValue(e.target.value)}
         onFocus={() => setFocused(true)}
         onBlur={() => setFocused(false)}
-        className={`flex-1 bg-transparent outline-none text-neutral-900 placeholder:text-neutral-500 ${
-          isLg ? "text-lg" : "text-sm"
+        className={`flex-1 bg-transparent outline-none text-neutral-950 placeholder:text-neutral-500 ${
+          isLg ? "text-lg" : "text-base"
         }`}
       />
 
@@ -53,9 +53,9 @@ export default function SearchInput({
           type="button"
           aria-label="Очистить"
           onClick={() => setValue("")}
-          className={`flex items-center justify-center rounded-full text-neutral-600 transition-colors hover:cursor-pointer ${buttonSize}`}
+          className={`flex items-center justify-center rounded-full text-black-alpha transition-colors hover:cursor-pointer ${buttonSize}`}
         >
-          <X className="h-5 w-5" />
+          <X className="h-6 w-6" />
         </button>
       ) : (
         <button
@@ -64,11 +64,11 @@ export default function SearchInput({
           onMouseDown={(e) => e.preventDefault()}
           className={`flex items-center justify-center rounded-full transition-colors hover:cursor-pointer ${buttonSize} ${
             showMutedArrow
-              ? "bg-neutral-200 text-muted"
+              ? "bg-muted-15 text-white"
               : "bg-primary text-white hover:bg-link-hover active:bg-pressed"
           }`}
         >
-          {focused ? <ArrowRight className="h-5 w-5" /> : <Search className="h-5 w-5" />}
+          {focused ? <ArrowRightBoldIcon className="h-5 w-5" /> : <Search className="h-5 w-5" />}
         </button>
       )}
     </form>

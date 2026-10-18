@@ -1,5 +1,5 @@
 """Живой поиск по внешним API во время запроса — arXiv, Semantic Scholar,
-Crossref, OpenAlex, GitHub, Hacker News.
+Crossref, OpenAlex, GitHub, Hacker News, NSF, UKRI GtR, CORDIS.
 """
 
 from __future__ import annotations
@@ -371,6 +371,181 @@ def fetch_hackernews_live(client: httpx.Client, query: str, *, limit: int = 20) 
 
 
 # --------------------------------------------------------------------------
+# Гранты — NSF, UKRI Gateway to Research, CORDIS (EU). Проект получил
+# финансирование раньше, чем о нём напишут медиа — классический слабый сигнал.
+# Все три API открытые, ключ не нужен.
+# --------------------------------------------------------------------------
+
+_STOPWORDS = frozenset({"the", "and", "for", "with", "from", "into", "that", "this", "its", "are", "was", "using", "based"})
+
+
+def _query_tokens(query: str) -> list[str]:
+    """Значимые слова запроса (без коротких и служебных) — для AND-поиска
+    и локальной проверки релевантности."""
+    words = re.findall(r"[a-z0-9]+", query.lower())
+    return [w for w in words if len(w) > 2 and w not in _STOPWORDS]
+
+
+def _relevant(query: str, text: str) -> bool:
+    """Хотя бы половина значимых слов запроса встречается в тексте. Нужно для
+    NSF: его поиск нечёткий и разбивает запрос по OR."""
+    tokens = _query_tokens(query)
+    if not tokens:
+        return True
+    lowered = text.lower()
+    return sum(t in lowered for t in tokens) >= max(1, len(tokens) // 2)
+
+
+NSF_AWARDS_API = "https://www.research.gov/awardapi-service/v1/awards.json"
+
+
+def fetch_nsf_live(client: httpx.Client, query: str, *, limit: int = 20) -> list[LiveItem]:
+    def search(keyword: str) -> list[dict] | None:
+        params = {
+            "keyword": keyword,
+            "rpp": str(limit),
+            "printFields": "id,title,abstractText,date,awardeeName,pdPIName,fundProgramName",
+        }
+        resp = _get(client, f"{NSF_AWARDS_API}?{urlencode(params)}")
+        if resp is None or resp.status_code != 200:
+            return None
+        try:
+            return resp.json().get("response", {}).get("award") or []
+        except ValueError:
+            log.error("nsf: не удалось разобрать ответ как JSON")
+            return None
+
+    # фраза в кавычках точнее; без кавычек NSF ищет по OR, а на длинных
+    # запросах фраза даёт 0 — тогда падаем на обычный поиск
+    awards = search(f'"{query}"')
+    if awards is None:
+        return []
+    if not awards:
+        awards = search(query) or []
+
+    items = []
+    for award in awards:
+        title, award_id = award.get("title"), award.get("id")
+        if not title or not award_id:
+            continue
+        if not _relevant(query, f"{title} {award.get('abstractText') or ''}"):
+            continue
+        published_at = None
+        if award.get("date"):
+            try:  # NSF отдаёт MM/DD/YYYY
+                published_at = datetime.strptime(award["date"], "%m/%d/%Y").replace(tzinfo=timezone.utc)
+            except ValueError:
+                pass
+        items.append(LiveItem(
+            source_key="nsf",
+            url=f"https://www.nsf.gov/awardsearch/showAward?AWD_ID={award_id}",
+            title=" ".join(title.split()),
+            published_at=published_at,
+            summary=" ".join((award.get("abstractText") or "").split()) or None,
+            author=award.get("awardeeName"),
+            raw_categories=award.get("fundProgramName"),
+        ))
+    return items
+
+
+UKRI_GTR_API = "https://gtr.ukri.org/gtr/api/projects"
+
+
+def fetch_ukri_live(client: httpx.Client, query: str, *, limit: int = 20) -> list[LiveItem]:
+    # GtR отклоняет размер страницы меньше 10
+    params = {"q": query, "s": str(max(limit, 10))}
+    resp = _get(
+        client, f"{UKRI_GTR_API}?{urlencode(params)}",
+        headers={"Accept": "application/vnd.rcuk.gtr.json-v7"},
+    )
+    if resp is None or resp.status_code != 200:
+        return []
+
+    try:
+        projects = resp.json().get("project") or []
+    except ValueError:
+        log.error("ukri: не удалось разобрать ответ как JSON")
+        return []
+
+    items = []
+    for project in projects:
+        title = project.get("title")
+        ref = next(
+            (i.get("value") for i in (project.get("identifiers") or {}).get("identifier", [])
+             if i.get("type") == "RCUK"),
+            None,
+        )
+        if not title or not ref:
+            continue
+        published_at = None
+        if project.get("created"):  # epoch в миллисекундах
+            try:
+                published_at = datetime.fromtimestamp(project["created"] / 1000, tz=timezone.utc)
+            except (TypeError, ValueError, OverflowError, OSError):
+                pass
+        items.append(LiveItem(
+            source_key="ukri",
+            url=f"https://gtr.ukri.org/projects?ref={ref}",
+            title=" ".join(title.split()),
+            published_at=published_at,
+            summary=" ".join((project.get("abstractText") or project.get("techAbstractText") or "").split()) or None,
+            raw_categories=project.get("leadFunder"),
+        ))
+    return items
+
+
+CORDIS_SEARCH_API = "https://cordis.europa.eu/search/en"
+
+
+def fetch_cordis_live(client: httpx.Client, query: str, *, limit: int = 20) -> list[LiveItem]:
+    def search(terms: str) -> list[dict] | None:
+        # без contenttype='project' поиск отдаёт новостные статьи на разных языках
+        params = {"q": f"contenttype='project' AND {terms}", "format": "json", "num": str(limit)}
+        resp = _get(client, f"{CORDIS_SEARCH_API}?{urlencode(params)}")
+        if resp is None or resp.status_code != 200:
+            return None
+        try:
+            hits = resp.json().get("hits", {}).get("hit") or []
+        except ValueError:
+            log.error("cordis: не удалось разобрать ответ как JSON")
+            return None
+        # единственный результат XML→JSON-конвертер отдаёт не списком
+        return [hits] if isinstance(hits, dict) else hits
+
+    tokens = _query_tokens(query)
+    if not tokens:
+        return []
+    # точная фраза, а если не нашлось — все значимые слова по отдельности
+    hits = search(f"'{' '.join(tokens)}'")
+    if hits is None:
+        return []
+    if not hits and len(tokens) > 1:
+        hits = search(" AND ".join(f"'{t}'" for t in tokens)) or []
+
+    items = []
+    for hit in hits:
+        project = hit.get("project") or {}
+        title, project_id = project.get("title"), project.get("id")
+        if not title or not project_id:
+            continue
+        published_at = None
+        if project.get("startDate"):
+            try:
+                published_at = datetime.fromisoformat(project["startDate"]).replace(tzinfo=timezone.utc)
+            except ValueError:
+                pass
+        acronym = project.get("acronym")
+        items.append(LiveItem(
+            source_key="cordis",
+            url=f"https://cordis.europa.eu/project/id/{project_id}",
+            title=f"{acronym}: {' '.join(title.split())}" if acronym else " ".join(title.split()),
+            published_at=published_at,
+            summary=" ".join((project.get("objective") or project.get("teaser") or "").split()) or None,
+        ))
+    return items
+
+
+# --------------------------------------------------------------------------
 # Сводный вызов + персистентность (обогащение БД)
 # --------------------------------------------------------------------------
 
@@ -399,6 +574,18 @@ LIVE_SOURCE_META: dict[str, dict[str, str]] = {
         name="Hacker News", site_url="https://news.ycombinator.com", source_type="community_forum",
         trust_level="medium", language="EN", topics="Все",
     ),
+    "nsf": dict(
+        name="NSF Awards", site_url="https://www.nsf.gov/awardsearch", source_type="grant_database",
+        trust_level="high", language="EN", topics="Все",
+    ),
+    "ukri": dict(
+        name="UKRI Gateway to Research", site_url="https://gtr.ukri.org", source_type="grant_database",
+        trust_level="high", language="EN", topics="Все",
+    ),
+    "cordis": dict(
+        name="CORDIS (EU)", site_url="https://cordis.europa.eu", source_type="grant_database",
+        trust_level="high", language="EN", topics="Все",
+    ),
 }
 
 
@@ -415,6 +602,9 @@ def fetch_all_live(query: str) -> list[LiveItem]:
         ("openalex", fetch_openalex_live),
         ("github", fetch_github_live),
         ("hackernews", fetch_hackernews_live),
+        ("nsf", fetch_nsf_live),
+        ("ukri", fetch_ukri_live),
+        ("cordis", fetch_cordis_live),
     ]
 
     with _client() as client:

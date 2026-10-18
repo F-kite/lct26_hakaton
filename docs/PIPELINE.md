@@ -44,8 +44,9 @@ flowchart TB
 2. **Поиск кандидатов**:
    - `candidates.py::find_candidates` — ILIKE по заголовку/summary в
      накопленном корпусе (`feed_items`, пополняется RSS-collector'ом).
-   - `live_sources.py::fetch_all_live` — live-поиск по 6 внешним API
-     (arXiv, Semantic Scholar, Crossref, OpenAlex, GitHub, Hacker News)
+   - `live_sources.py::fetch_all_live` — live-поиск по 9 внешним API
+     (arXiv, Semantic Scholar, Crossref, OpenAlex, GitHub, Hacker News,
+     гранты: NSF, UKRI Gateway to Research, CORDIS)
      в параллельных потоках: время фазы определяет самый медленный
      источник, а не сумма (retry на 429 у одного не задерживает остальные);
      найденное сразу пишется в ту же таблицу `feed_items` (дедуп по

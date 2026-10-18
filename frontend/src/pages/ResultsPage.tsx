@@ -20,7 +20,7 @@ function formatDate(iso: string): string {
   return `${d}.${m}.${y}`;
 }
 
-function formatPeriod(from: string | null, to: string | null): string {
+function formatPeriod(from?: string | null, to?: string | null): string {
   if (from && to) return `${formatDate(from)} — ${formatDate(to)}`;
   if (from) return `с ${formatDate(from)}`;
   return `по ${formatDate(to as string)}`;

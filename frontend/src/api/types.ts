@@ -58,8 +58,8 @@ export interface SearchParams {
 export interface SearchStatusResponse {
   query_id: number;
   query_text: string;
-  date_from: string | null;
-  date_to: string | null;
+  date_from?: string | null;
+  date_to?: string | null;
   status: "pending" | "running" | "done" | "failed";
   phase: SearchPhase;
   sources_processed: number;

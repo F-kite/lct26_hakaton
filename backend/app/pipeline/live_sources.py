@@ -10,7 +10,7 @@ import re
 import time
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from urllib.parse import urlencode
 from xml.etree import ElementTree
 
@@ -74,6 +74,27 @@ def _get(
 
 
 # --------------------------------------------------------------------------
+def _day_start_ts(d: date) -> int:
+    return int(datetime(d.year, d.month, d.day, tzinfo=timezone.utc).timestamp())
+
+
+def _day_end_ts(d: date) -> int:
+    return _day_start_ts(d) + 86399
+
+
+def _in_range(published_at: datetime | None, date_from: date | None, date_to: date | None) -> bool:
+    """Страховка поверх фильтров API: источники трактуют даты по-своему
+    (и не все умеют фильтровать). Запись без даты при заданном диапазоне
+    отбрасывается — проверить её попадание нельзя."""
+    if date_from is None and date_to is None:
+        return True
+    if published_at is None:
+        return False
+    d = published_at.date()
+    return (date_from is None or d >= date_from) and (date_to is None or d <= date_to)
+
+
+# --------------------------------------------------------------------------
 # arXiv
 # --------------------------------------------------------------------------
 
@@ -81,9 +102,18 @@ ARXIV_API = "http://export.arxiv.org/api/query"
 ATOM_NS = {"atom": "http://www.w3.org/2005/Atom"}
 
 
-def fetch_arxiv_live(client: httpx.Client, query: str, *, max_results: int = 30) -> list[LiveItem]:
+def fetch_arxiv_live(
+    client: httpx.Client, query: str, *, max_results: int = 30,
+    date_from: date | None = None, date_to: date | None = None,
+) -> list[LiveItem]:
+    search_query = f"all:{query}"
+    if date_from or date_to:
+        # submittedDate требует обе границы — открытую заменяем крайним значением
+        lo = (date_from or date(1991, 1, 1)).strftime("%Y%m%d") + "0000"
+        hi = (date_to or date(2999, 12, 31)).strftime("%Y%m%d") + "2359"
+        search_query += f" AND submittedDate:[{lo} TO {hi}]"
     params = {
-        "search_query": f"all:{query}",
+        "search_query": search_query,
         "sortBy": "relevance",
         "max_results": str(max_results),
     }
@@ -133,12 +163,17 @@ def fetch_arxiv_live(client: httpx.Client, query: str, *, max_results: int = 30)
 SEMANTIC_SCHOLAR_API = "https://api.semanticscholar.org/graph/v1/paper/search"
 
 
-def fetch_semantic_scholar_live(client: httpx.Client, query: str, *, limit: int = 30) -> list[LiveItem]:
+def fetch_semantic_scholar_live(
+    client: httpx.Client, query: str, *, limit: int = 30,
+    date_from: date | None = None, date_to: date | None = None,
+) -> list[LiveItem]:
     params = {
         "query": query,
         "limit": str(limit),
         "fields": "title,abstract,url,publicationDate,authors,externalIds",
     }
+    if date_from or date_to:
+        params["publicationDateOrYear"] = f"{date_from or ''}:{date_to or ''}"
     headers = {"x-api-key": SEMANTIC_SCHOLAR_API_KEY} if SEMANTIC_SCHOLAR_API_KEY else None
     resp = _get(client, f"{SEMANTIC_SCHOLAR_API}?{urlencode(params)}", headers=headers)
     if resp is None or resp.status_code != 200:
@@ -175,8 +210,18 @@ def fetch_semantic_scholar_live(client: httpx.Client, query: str, *, limit: int 
 CROSSREF_SEARCH_API = "https://api.crossref.org/works"
 
 
-def search_crossref_live(client: httpx.Client, query: str, *, rows: int = 20) -> list[LiveItem]:
+def search_crossref_live(
+    client: httpx.Client, query: str, *, rows: int = 20,
+    date_from: date | None = None, date_to: date | None = None,
+) -> list[LiveItem]:
     params = {"query": query, "rows": str(rows)}
+    filters = []
+    if date_from:
+        filters.append(f"from-pub-date:{date_from}")
+    if date_to:
+        filters.append(f"until-pub-date:{date_to}")
+    if filters:
+        params["filter"] = ",".join(filters)
     resp = _get(client, f"{CROSSREF_SEARCH_API}?{urlencode(params)}")
     if resp is None or resp.status_code != 200:
         return []
@@ -240,8 +285,18 @@ def _reconstruct_openalex_abstract(inverted_index: dict[str, list[int]] | None) 
     return " ".join(positions[i] for i in sorted(positions))
 
 
-def fetch_openalex_live(client: httpx.Client, query: str, *, per_page: int = 25) -> list[LiveItem]:
+def fetch_openalex_live(
+    client: httpx.Client, query: str, *, per_page: int = 25,
+    date_from: date | None = None, date_to: date | None = None,
+) -> list[LiveItem]:
     params = {"search": query, "per-page": str(per_page), "mailto": CONTACT_EMAIL}
+    filters = []
+    if date_from:
+        filters.append(f"from_publication_date:{date_from}")
+    if date_to:
+        filters.append(f"to_publication_date:{date_to}")
+    if filters:
+        params["filter"] = ",".join(filters)
     resp = _get(client, f"{OPENALEX_API}?{urlencode(params)}")
     if resp is None or resp.status_code != 200:
         return []
@@ -288,11 +343,21 @@ def fetch_openalex_live(client: httpx.Client, query: str, *, per_page: int = 25)
 GITHUB_SEARCH_API = "https://api.github.com/search/repositories"
 
 
-def fetch_github_live(client: httpx.Client, query: str, *, limit: int = 20) -> list[LiveItem]:
+def fetch_github_live(
+    client: httpx.Client, query: str, *, limit: int = 20,
+    date_from: date | None = None, date_to: date | None = None,
+) -> list[LiveItem]:
     headers = {"Accept": "application/vnd.github+json"}
     if GITHUB_TOKEN:
         headers["Authorization"] = f"Bearer {GITHUB_TOKEN}"
-    params = {"q": query, "per_page": str(limit)}
+    q = query
+    if date_from and date_to:
+        q += f" created:{date_from}..{date_to}"
+    elif date_from:
+        q += f" created:>={date_from}"
+    elif date_to:
+        q += f" created:<={date_to}"
+    params = {"q": q, "per_page": str(limit)}
     resp = _get(client, f"{GITHUB_SEARCH_API}?{urlencode(params)}", headers=headers)
     if resp is None or resp.status_code != 200:
         return []
@@ -334,8 +399,18 @@ def fetch_github_live(client: httpx.Client, query: str, *, limit: int = 20) -> l
 HACKERNEWS_SEARCH_API = "https://hn.algolia.com/api/v1/search"
 
 
-def fetch_hackernews_live(client: httpx.Client, query: str, *, limit: int = 20) -> list[LiveItem]:
+def fetch_hackernews_live(
+    client: httpx.Client, query: str, *, limit: int = 20,
+    date_from: date | None = None, date_to: date | None = None,
+) -> list[LiveItem]:
     params = {"query": query, "tags": "story", "hitsPerPage": str(limit)}
+    numeric = []
+    if date_from:
+        numeric.append(f"created_at_i>={_day_start_ts(date_from)}")
+    if date_to:
+        numeric.append(f"created_at_i<={_day_end_ts(date_to)}")
+    if numeric:
+        params["numericFilters"] = ",".join(numeric)
     resp = _get(client, f"{HACKERNEWS_SEARCH_API}?{urlencode(params)}")
     if resp is None or resp.status_code != 200:
         return []
@@ -402,11 +477,15 @@ LIVE_SOURCE_META: dict[str, dict[str, str]] = {
 }
 
 
-def fetch_all_live(query: str) -> list[LiveItem]:
+def fetch_all_live(
+    query: str, date_from: date | None = None, date_to: date | None = None,
+) -> list[LiveItem]:
     """Опросить все живые источники параллельно — они независимы, и время
     фазы определяет самый медленный, а не сумма (retry на 429 у одного
     источника не задерживает остальные). Падение одного не роняет остальные.
     Порядок результатов — как в списке fetchers (httpx.Client потокобезопасен).
+    date_from/date_to — необязательный диапазон дат публикации (включительно):
+    передаётся в API источника и дополнительно проверяется после ответа.
     """
     fetchers = [
         ("arxiv", fetch_arxiv_live),
@@ -422,7 +501,8 @@ def fetch_all_live(query: str) -> list[LiveItem]:
         def run(entry) -> list[LiveItem]:
             key, fn = entry
             try:
-                found = fn(client, query)
+                found = fn(client, query, date_from=date_from, date_to=date_to)
+                found = [i for i in found if _in_range(i.published_at, date_from, date_to)]
                 log.info("[%s] live-поиск: %d записей", key, len(found))
                 return found
             except Exception as exc:

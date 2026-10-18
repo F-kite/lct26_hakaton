@@ -16,6 +16,17 @@ import StopConfirmModal from "../components/search/StopConfirmModal";
 
 type Tab = "included" | "excluded";
 
+function formatDate(iso: string): string {
+  const [y, m, d] = iso.split("-");
+  return `${d}.${m}.${y}`;
+}
+
+function formatPeriod(from: string | null, to: string | null): string {
+  if (from && to) return `${formatDate(from)} — ${formatDate(to)}`;
+  if (from) return `с ${formatDate(from)}`;
+  return `по ${formatDate(to as string)}`;
+}
+
 export default function ResultsPage() {
   const { queryId } = useParams<{ queryId: string }>();
   const navigate = useNavigate();
@@ -30,7 +41,7 @@ export default function ResultsPage() {
   const { data: status } = useSearchStatus(numericQueryId, pollingEnabled);
 
   const handleNewSearch = (query: string) => {
-    createSearch.mutate(query, {
+    createSearch.mutate({ query, date_from: status?.date_from, date_to: status?.date_to }, {
       onSuccess: (data) => navigate(`/results/${data.query_id}`),
     });
   };
@@ -113,6 +124,11 @@ export default function ResultsPage() {
         <h1 className="text-3xl font-bold text-neutral-950">
           Слабые сигналы в {status.query_text}
         </h1>
+        {(status.date_from || status.date_to) && (
+          <p className="mt-2 text-neutral-600">
+            Период публикаций: {formatPeriod(status.date_from, status.date_to)}
+          </p>
+        )}
 
         <div className="mt-6 flex flex-col gap-4 sm:flex-row">
           <StatCard

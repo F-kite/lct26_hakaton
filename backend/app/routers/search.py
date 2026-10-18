@@ -32,7 +32,9 @@ def create_search(
     background_tasks: BackgroundTasks,
     session: Session = Depends(get_session),
 ) -> SearchCreatedResponse:
-    q = SearchQuery(query_text=body.query, status="pending")
+    q = SearchQuery(
+        query_text=body.query, status="pending", date_from=body.date_from, date_to=body.date_to,
+    )
     session.add(q)
     session.commit()
     session.refresh(q)
@@ -66,6 +68,8 @@ def get_search_status(query_id: int, session: Session = Depends(get_session)) ->
         query_text=q.query_text,
         status=q.status,
         phase=q.phase,
+        date_from=q.date_from,
+        date_to=q.date_to,
         sources_processed=q.sources_processed,
         candidates_found=q.candidates_found,
         signals_above_75=q.signals_above_75,

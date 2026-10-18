@@ -7,6 +7,7 @@ import { useNavigate } from "react-router-dom";
 
 import { useCancelSearch, useCreateSearch, useSearchStatus } from "../api/queries";
 import Logo from "../components/Logo";
+import DateRangeFilter, { isValidRange, type DateRange } from "../components/search/DateRangeFilter";
 import SearchInput from "../components/search/SearchInput";
 import SearchProgressModal from "../components/search/SearchProgressModal";
 import StopConfirmModal from "../components/search/StopConfirmModal";
@@ -27,6 +28,7 @@ export default function SearchHomePage() {
   const [pollingEnabled, setPollingEnabled] = useState(true);
   const [confirmingStop, setConfirmingStop] = useState(false);
   const [stoppedNotice, setStoppedNotice] = useState(false);
+  const [dateRange, setDateRange] = useState<DateRange>({ dateFrom: "", dateTo: "" });
 
   const { data: status } = useSearchStatus(activeQueryId, pollingEnabled);
 
@@ -37,10 +39,11 @@ export default function SearchHomePage() {
   }, [status?.status, activeQueryId, navigate]);
 
   const handleSubmit = (query: string) => {
+    if (!isValidRange(dateRange)) return;
     setQueryText(query);
     setStoppedNotice(false);
     setPollingEnabled(true);
-    createSearch.mutate(query, {
+    createSearch.mutate({ query, date_from: dateRange.dateFrom, date_to: dateRange.dateTo }, {
       onSuccess: (data) => setActiveQueryId(data.query_id),
     });
   };
@@ -75,6 +78,10 @@ export default function SearchHomePage() {
 
         <div className="mt-8 w-full">
           <SearchInput size="lg" onSubmit={handleSubmit} />
+        </div>
+
+        <div className="mt-5">
+          <DateRangeFilter value={dateRange} onChange={setDateRange} />
         </div>
 
         <div className="mt-10 flex justify-center gap-3 sm:mt-16 xl:mt-61">

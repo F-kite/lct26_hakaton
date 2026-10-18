@@ -1,10 +1,12 @@
 name: rss-collector
 
+# journald: логи переживают пересоздание контейнера (docker compose up/down),
+# ротацию делает systemd-journald. Читать: docker logs <контейнер> или
+# journalctl CONTAINER_NAME=rss-collector-backend-1
 x-logging: &default-logging
-  driver: "json-file"
+  driver: "journald"
   options:
-    max-size: "10m"
-    max-file: "3"
+    tag: "{{.Name}}"
 
 services:
   db:

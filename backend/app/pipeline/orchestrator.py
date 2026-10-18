@@ -156,11 +156,14 @@ def run_search(
                 log.info("запрос переведён для поиска: %r -> %r", q.query_text, translated)
                 search_query_text = translated
 
-        db_candidates = find_candidates(session, search_query_text, limit=SEARCH_CANDIDATE_LIMIT)
+        db_candidates = find_candidates(
+            session, search_query_text, limit=SEARCH_CANDIDATE_LIMIT,
+            date_from=q.date_from, date_to=q.date_to,
+        )
         candidates = list(db_candidates)
         seen_feed_item_ids = {c.feed_item_ids[0] for c in candidates}
 
-        live_items = fetch_all_live(search_query_text)
+        live_items = fetch_all_live(search_query_text, q.date_from, q.date_to)
         live_feed_items = persist_live_items(session, live_items)
         for fi in live_feed_items:
             if fi.id not in seen_feed_item_ids:

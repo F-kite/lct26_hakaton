@@ -8,12 +8,25 @@ import "./index.css";
 
 const queryClient = new QueryClient();
 
-createRoot(document.getElementById("root")!).render(
-  <StrictMode>
-    <QueryClientProvider client={queryClient}>
-      <BrowserRouter>
-        <App />
-      </BrowserRouter>
-    </QueryClientProvider>
-  </StrictMode>,
-);
+const root = createRoot(document.getElementById("root")!);
+
+// Витрина /dev — только в dev-сборке, вне BrowserRouter (внутри свои MemoryRouter'ы)
+if (import.meta.env.DEV && window.location.pathname === "/dev") {
+  import("./pages/DevPreviewPage").then(({ default: DevPreviewPage }) => {
+    root.render(
+      <StrictMode>
+        <DevPreviewPage />
+      </StrictMode>,
+    );
+  });
+} else {
+  root.render(
+    <StrictMode>
+      <QueryClientProvider client={queryClient}>
+        <BrowserRouter>
+          <App />
+        </BrowserRouter>
+      </QueryClientProvider>
+    </StrictMode>,
+  );
+}

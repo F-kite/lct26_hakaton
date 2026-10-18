@@ -17,24 +17,24 @@ export default function CaseExamples({ text, primarySource }: Props) {
     : text;
 
   return (
-    <div className="rounded-2xl bg-neutral-0 p-6 shadow-sm">
-      <h3 className="font-bold text-neutral-950  [-webkit-text-stroke:0.4px_currentColor]">Где это уже проявилось</h3>
-      <p className="mt-3 rounded-xl bg-neutral-50 p-4 text-sm leading-relaxed text-neutral-700">
-        {displayText}
-      </p>
-      {primarySource && (
-        <p className="mt-2 text-xs text-neutral-500">
-          Источник:{" "}
+    <div className="rounded-xl p-5 glass-card glass-border-8">
+      <h3 className="font-bold text-neutral-950  [-webkit-text-stroke:0.4px_currentColor]">Где это уже проявилось:</h3>
+      <div className="mt-3 rounded-lg bg-neutral-100/50 border border-neutral-200 p-3 text-sm leading-relaxed text-neutral-600">
+        {primarySource && (
           <a
             href={primarySource.url}
             target="_blank"
             rel="noreferrer"
-            className="font-medium text-link hover:text-link-hover"
+            className="text-sm font-medium text-neutral-950 hover:text-link-hover"
           >
             {primarySource.source_name}
           </a>
+        )}
+        <p>
+          {displayText}
         </p>
-      )}
+      </div>
+
     </div>
   );
 }

@@ -25,7 +25,7 @@ export default function SignalsTable({ signals, mode, onRowClick }: Props) {
     <table className="w-full border-collapse border-spacing-0 text-sm">
       <thead>
         <tr className="border-b border-neutral-100 text-left text-neutral-900">
-          <th className="px-4 py-4 font-normal">№</th>
+          <th className="px-4 py-4 font-normal text-center">№</th>
           <th className="px-4 py-4 font-normal">Технология</th>
           <th
             className="cursor-pointer select-none px-4 py-4 font-normal"
@@ -47,20 +47,20 @@ export default function SignalsTable({ signals, mode, onRowClick }: Props) {
               key={signal.id}
               className="border-b border-neutral-100 bg-neutral-0 last:border-b-0"
             >
-              <td className="px-5 py-5 text-neutral-950 font-display text-base font-bold">{String(i + 1).padStart(2, "0")}</td>
+              <td className="px-5 py-5 text-neutral-950 font-display text-base text-center font-bold">{String(i + 1).padStart(2, "0")}</td>
               <td className="max-w-xs truncate px-4 py-5 font-medium text-neutral-900">
                 {signal.title}
               </td>
               <td className="px-4 py-4">
                 <div className="relative h-5 w-32 overflow-hidden rounded-sm bg-neutral-200">
                   <div className={`h-full ${barColor}`} style={{ width: `${pct}%` }} />
-                  <span className="absolute inset-0 flex items-center justify-center text-xs font-medium tabular-nums text-neutral-950">
+                  <span className="absolute inset-0 flex items-center justify-center font-display text-sm font-bold tabular-nums text-neutral-950">
                     {pct}%
                   </span>
                 </div>
               </td>
               <td className="px-4 py-5">
-                <div className="flex flex-wrap gap-1.5">
+                <div className="flex flex-wrap gap-4">
                   {tags.map((tag) => (
                     <span
                       key={tag}

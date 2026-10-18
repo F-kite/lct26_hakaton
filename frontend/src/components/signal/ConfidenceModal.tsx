@@ -17,29 +17,30 @@ export default function ConfidenceModal({ signal, onClose }: Props) {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-950/30 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-950/30"
       onClick={onClose}
     >
       <div
-        className="animate-fade-in relative mx-4 w-full max-w-lg rounded-2xl bg-neutral-0 p-8 shadow-xl"
+        className="animate-fade-in glass-frame relative mx-4 w-full max-w-2xl rounded-xl p-2"
         onClick={(e) => e.stopPropagation()}
       >
+        <div className="rounded-xl bg-neutral-0 p-7">
         <button
           type="button"
           onClick={onClose}
           aria-label="Закрыть"
-          className="absolute right-5 top-5 text-neutral-400 hover:text-neutral-900 hover:cursor-pointer"
+          className="absolute right-0 -top-7 text-white hover:text-neutral-200 hover:cursor-pointer sm:-right-10"
         >
-          <X className="h-5 w-5" />
+          <X className="h-10 w-10" />
         </button>
-        <h3 className="text-2xl font-bold text-neutral-950">Как определяется оценка?</h3>
-        <p className="mt-3 text-sm leading-relaxed text-neutral-600">
+        <h3 className="text-[32px] font-bold text-neutral-950">Как определяется оценка?</h3>
+        <p className="mt-4 text-sm leading-relaxed text-neutral-600">
           {pct}% — это степень уверенности модели в том, что технология соответствует признакам
           слабого сигнала. Это не оценка качества или зрелости самой технологии.
         </p>
         {predictors.length > 0 && (
           <>
-            <h4 className="mt-5 text-xl font-bold text-neutral-950">Что влияет на оценку</h4>
+            <h4 className="mt-4 text-xl font-bold text-neutral-950">Что влияет на оценку</h4>
             <ul className="mt-2 space-y-1 text-sm text-neutral-600">
               {predictors.map((p) => (
                 <li key={p}>• {p}</li>
@@ -47,7 +48,8 @@ export default function ConfidenceModal({ signal, onClose }: Props) {
             </ul>
           </>
         )}
-        <div className="mt-5 rounded-xl bg-neutral-200/20  border-1 border-neutral-300 p-2 text-sm text-neutral-600">{summary}</div>
+        <div className="mt-4 rounded-xl bg-neutral-200/20  border border-neutral-300 p-4 text-sm text-neutral-600">{summary}</div>
+        </div>
       </div>
     </div>
   );

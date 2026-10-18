@@ -9,9 +9,18 @@ export default function NotFoundPage() {
         <Logo />
       </header>
       <main className="flex flex-1 flex-col items-center justify-center text-center">
-        <div className="font-display text-9xl font-bold text-link-hover ">404</div>
-        <h1 className="mt-4 text-4xl font-bold text-neutral-950">Страница не найдена</h1>
-        <p className="mx-auto mt-2 max-w-lg text-xl text-neutral-600">
+        {/* макет: 3 символа по 220px, gap 20px, высота 230px, opacity 10% */}
+        <div
+          role="img"
+          aria-label="404"
+          className="flex items-center gap-5 font-display text-[220px] leading-57.5 font-medium text-primary opacity-10 select-none"
+        >
+          <span aria-hidden>4</span>
+          <span aria-hidden>0</span>
+          <span aria-hidden>4</span>
+        </div>
+        <h1 className="mt-4 text-5xl font-bold text-neutral-950">Страница не найдена</h1>
+        <p className="mx-auto mt-5 max-w-lg text-lg text-neutral-600">
           Возможно, страница была перемещена, удалена или указан неверный адрес.
         </p>
         <Link

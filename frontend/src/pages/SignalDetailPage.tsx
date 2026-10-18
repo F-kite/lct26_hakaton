@@ -16,7 +16,7 @@ export default function SignalDetailPage() {
   const { data: signal, isLoading } = useSignalDetail(signalId ? Number(signalId) : null);
 
   const handleNewSearch = (query: string) => {
-    createSearch.mutate(query, {
+    createSearch.mutate({ query }, {
       onSuccess: (data) => navigate(`/results/${data.query_id}`),
     });
   };

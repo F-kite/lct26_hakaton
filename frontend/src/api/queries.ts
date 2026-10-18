@@ -1,14 +1,19 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api } from "./client";
-import type { SearchCreatedResponse, SearchStatusResponse, Signal } from "./types";
+import type { SearchCreatedResponse, SearchParams, SearchStatusResponse, Signal } from "./types";
 
 const POLL_INTERVAL_MS = 3000;
 
 export function useCreateSearch() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (query: string) => api.post<SearchCreatedResponse>("/search", { query }),
+    mutationFn: (params: SearchParams) =>
+      api.post<SearchCreatedResponse>("/search", {
+        query: params.query,
+        date_from: params.date_from || null,
+        date_to: params.date_to || null,
+      }),
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["searchStatus", data.query_id] });
     },

@@ -7,7 +7,7 @@ feed_items за окно свежести. Группировки по пере�
 from __future__ import annotations
 
 import re
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, time, timedelta, timezone
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -19,16 +19,28 @@ CANDIDATE_LOOKBACK_DAYS = 365
 _WORD_RE = re.compile(r"[a-zа-я0-9]+", re.IGNORECASE)
 
 
-def find_candidates(session: Session, query: str, *, limit: int = 200) -> list[SignalCandidate]:
+def find_candidates(
+    session: Session, query: str, *, limit: int = 200,
+    date_from: date | None = None, date_to: date | None = None,
+) -> list[SignalCandidate]:
+    """date_from/date_to — диапазон дат публикации включительно. Без date_from
+    действует окно свежести CANDIDATE_LOOKBACK_DAYS, без date_to верхней
+    границы нет."""
     terms = [t for t in _WORD_RE.findall(query.lower()) if len(t) > 2]
     if not terms:
         return []
 
+    if date_from is not None:
+        since = datetime.combine(date_from, time.min, tzinfo=timezone.utc)
+    else:
+        since = datetime.now(timezone.utc) - timedelta(days=CANDIDATE_LOOKBACK_DAYS)
     stmt = (
         select(FeedItem, Source)
         .join(Source, Source.id == FeedItem.source_id)
-        .where(FeedItem.published_at >= datetime.now(timezone.utc) - timedelta(days=CANDIDATE_LOOKBACK_DAYS))
+        .where(FeedItem.published_at >= since)
     )
+    if date_to is not None:
+        stmt = stmt.where(FeedItem.published_at < datetime.combine(date_to + timedelta(days=1), time.min, tzinfo=timezone.utc))
     for term in terms:
         pattern = f"%{term}%"
         stmt = stmt.where((FeedItem.title.ilike(pattern)) | (FeedItem.summary.ilike(pattern)))

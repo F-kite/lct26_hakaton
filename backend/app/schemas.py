@@ -6,13 +6,24 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class SearchRequest(BaseModel):
     query: str = Field(min_length=1, max_length=500)
+    # диапазон дат публикации, включительно; None — без границы с этой стороны
+    date_from: date | None = None
+    date_to: date | None = None
+
+    @model_validator(mode="after")
+    def _check_range(self) -> "SearchRequest":
+        if self.date_to is not None and self.date_to > date.today():
+            self.date_to = date.today()
+        if self.date_from and self.date_to and self.date_from > self.date_to:
+            raise ValueError("date_from не может быть позже date_to")
+        return self
 
 
 class SearchCreatedResponse(BaseModel):
@@ -61,6 +72,8 @@ class SearchStatusResponse(BaseModel):
     query_text: str
     status: str
     phase: str | None  # collecting|scoring|ranking|done — шаги модалки прогресса
+    date_from: date | None = None
+    date_to: date | None = None
     sources_processed: int
     candidates_found: int
     signals_above_75: int

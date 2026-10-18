@@ -3,10 +3,11 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 
 from sqlalchemy import (
     Boolean,
+    Date,
     DateTime,
     Float,
     ForeignKey,
@@ -102,6 +103,8 @@ class SearchQuery(Base):
     signals_above_75: Mapped[int] = mapped_column(Integer, default=0)
     phase: Mapped[str | None] = mapped_column(String(32))
     error: Mapped[str | None] = mapped_column(Text)
+    date_from: Mapped[date | None] = mapped_column(Date)  # диапазон дат публикации (включительно), None — без границы
+    date_to: Mapped[date | None] = mapped_column(Date)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 

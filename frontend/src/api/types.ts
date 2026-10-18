@@ -49,9 +49,17 @@ export interface SearchCreatedResponse {
 
 export type SearchPhase = "collecting" | "scoring" | "ranking" | "done" | null;
 
+export interface SearchParams {
+  query: string;
+  date_from?: string | null; // YYYY-MM-DD, включительно
+  date_to?: string | null;
+}
+
 export interface SearchStatusResponse {
   query_id: number;
   query_text: string;
+  date_from?: string | null;
+  date_to?: string | null;
   status: "pending" | "running" | "done" | "failed";
   phase: SearchPhase;
   sources_processed: number;

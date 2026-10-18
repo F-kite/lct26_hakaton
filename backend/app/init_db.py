@@ -13,6 +13,8 @@ _EXTRA_COLUMNS = [
     ("signals", "problem", "TEXT"),
     ("signals", "status", "VARCHAR(16) DEFAULT 'included'"),
     ("search_queries", "phase", "VARCHAR(32)"),
+    ("search_queries", "date_from", "DATE"),
+    ("search_queries", "date_to", "DATE"),
     ("signal_sources", "is_primary", "BOOLEAN DEFAULT FALSE"),
 ]
 

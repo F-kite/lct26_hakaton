@@ -74,9 +74,12 @@ services:
       GIGACHAT_MODEL: ${GIGACHAT_MODEL:-GigaChat-3-Ultra}
       GIGACHAT_CA_FILE: /certs/russian_trusted_root_ca.pem
       LLM_TIMEOUT_SECONDS: ${LLM_TIMEOUT_SECONDS:-240}
+      # логи в файл на хосте: ./logs/backend/backend.log, ротация по суткам
+      LOG_DIR: /app/logs
     volumes:
       # корневой сертификат НУЦ Минцифры для TLS к API GigaChat
       - ./certs:/certs:ro
+      - ./logs/backend:/app/logs
     ports:
       - "127.0.0.1:9000:8000"
     restart: unless-stopped

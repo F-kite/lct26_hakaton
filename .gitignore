@@ -30,3 +30,6 @@ getDataset/data/
 .DS_Store
 Thumbs.db
 desktop.ini
+
+# логи сервисов (volume)
+logs/

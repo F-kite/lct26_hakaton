@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import logging
+import os
+from logging.handlers import TimedRotatingFileHandler
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -13,6 +15,23 @@ logging.basicConfig(
     format="%(asctime)s %(levelname)-7s %(name)s | %(message)s",
     datefmt="%H:%M:%S",
 )
+
+# LOG_DIR — папка на хосте (volume): логи переживают пересоздание контейнера.
+# Новый файл каждые сутки, хранится 30 последних. Access-лог uvicorn не пишем —
+# фронтенд опрашивает статус каждые 2–3 с, это только шум.
+_log_dir = os.getenv("LOG_DIR")
+if _log_dir:
+    os.makedirs(_log_dir, exist_ok=True)
+    _file_handler = TimedRotatingFileHandler(
+        os.path.join(_log_dir, "backend.log"), when="midnight", backupCount=30, encoding="utf-8",
+    )
+    _file_handler.setFormatter(logging.Formatter(
+        "%(asctime)s %(levelname)-7s %(name)s | %(message)s", datefmt="%Y-%m-%d %H:%M:%S",
+    ))
+    # у логгера uvicorn свой обработчик и propagate=False — подключаем отдельно
+    # (uvicorn.error передаёт записи в uvicorn, отдельно его не трогаем)
+    for _name in ("", "uvicorn"):
+        logging.getLogger(_name).addHandler(_file_handler)
 
 from .config import FRONTEND_ORIGINS
 from .db import engine

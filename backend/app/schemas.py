@@ -57,6 +57,8 @@ class SignalOut(BaseModel):
     problem: str | None
     potential_advantage: str | None
     case_example: str | None
+    weak_criteria: list[dict] | None = None
+    manifestations: list[str] | None = None
     stage: str | None
     mention_trend: str | None
     score: float
@@ -98,3 +100,15 @@ class SearchSummaryResponse(BaseModel):
     top_signals: list[SummarySignalOut] = Field(default_factory=list)
     model: str | None = None
     error: str | None = None
+
+
+class SignalSourceDetailOut(SignalSourceOut):
+    summary: str | None = None
+    summary_model: str | None = None
+    summary_status: str  # ready | pending | original | none
+
+
+class SignalSourcesResponse(BaseModel):
+    signal_id: int
+    title: str
+    sources: list[SignalSourceDetailOut]

@@ -5,6 +5,7 @@ const CLASSES = ["слабый сигнал", "зрелая технология
 export default function ReasonTags({ signal }: { signal: Signal }) {
   const { explanation } = signal;
   const tags = explanation.key_predictors ?? [];
+  const criteria = signal.weak_criteria ?? [];
   const included = signal.status === "included";
   const heading = included ? "Почему это слабый сигнал:" : "Почему кандидат исключён:";
   const pct = Math.round(signal.score * 100);
@@ -28,6 +29,20 @@ export default function ReasonTags({ signal }: { signal: Signal }) {
     <div className="rounded-xl p-5 glass-card glass-border-8">
       <h3 className="font-bold text-neutral-950  [-webkit-text-stroke:0.4px_currentColor]">{heading}</h3>
       <p className="mt-2 text-sm text-neutral-700">{summary}</p>
+
+      {criteria.length > 0 && (
+        <ul className="mt-4 space-y-2.5">
+          {criteria.map((c) => (
+            <li key={c.criterion} className="flex gap-3 text-sm">
+              <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-success" aria-hidden />
+              <span>
+                <span className="font-medium text-neutral-950">{c.criterion}.</span>{" "}
+                <span className="text-neutral-700">{c.fact}</span>
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
 
       {tags.length > 0 && (
         <div className="mt-3 flex flex-wrap gap-2">
@@ -71,7 +86,7 @@ export default function ReasonTags({ signal }: { signal: Signal }) {
               <div className="text-sm text-neutral-500">Соответствие запросу</div>
               <div className="mt-2 font-display text-2xl font-bold text-neutral-950">{relevancePct}%</div>
               <p className="mt-1 text-xs text-neutral-500">
-                Смысловая близость запроса и текста публикации (модель E5). В выдачу попадает от 79%.
+                Смысловая близость запроса и текста публикации.
               </p>
             </div>
           )}

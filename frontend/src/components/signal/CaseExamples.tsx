@@ -2,19 +2,16 @@ import type { SignalSource } from "../../api/types";
 
 interface Props {
   text: string | null;
-  // Источник, чей текст реально стал этим кейс-примером (is_primary=true)
+  manifestations?: string[] | null;
   primarySource: SignalSource | null;
 }
 
-// LLM пишет эту фразу буквально в текст case_example, когда в источнике нет факта применения технологии
 const NOT_FOUND_RE = /^не указано в источнике\.?$/i;
+const NOT_CONFIRMED = "В найденных источниках применение не подтверждено.";
 
-export default function CaseExamples({ text, primarySource }: Props) {
-  if (!text) return null;
-
-  const displayText = NOT_FOUND_RE.test(text.trim())
-    ? "В найденных источниках применение не подтверждено."
-    : text;
+export default function CaseExamples({ text, manifestations = null, primarySource }: Props) {
+  const facts = manifestations ?? (text && !NOT_FOUND_RE.test(text.trim()) ? [text] : []);
+  if (manifestations === null && !text) return null;
 
   return (
     <div className="rounded-xl p-5 glass-card glass-border-8">
@@ -30,11 +27,16 @@ export default function CaseExamples({ text, primarySource }: Props) {
             {primarySource.source_name}
           </a>
         )}
-        <p>
-          {displayText}
-        </p>
+        {facts.length === 0 ? (
+          <p>{NOT_CONFIRMED}</p>
+        ) : (
+          <ul className="mt-1 list-disc space-y-1 pl-5">
+            {facts.map((fact) => (
+              <li key={fact}>{fact}</li>
+            ))}
+          </ul>
+        )}
       </div>
-
     </div>
   );
 }

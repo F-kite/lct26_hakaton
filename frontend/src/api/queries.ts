@@ -8,6 +8,7 @@ import type {
   SearchStatusResponse,
   SearchSummaryResponse,
   Signal,
+  SignalSourcesResponse,
 } from "./types";
 
 const POLL_INTERVAL_MS = 3000;
@@ -77,5 +78,15 @@ export function useRetrySummary(queryId: number | null) {
   return useMutation({
     mutationFn: () => api.post<SearchSummaryResponse>(`/search/${queryId}/summary/retry`, {}),
     onSuccess: (data) => queryClient.setQueryData(["searchSummary", queryId], data),
+  });
+}
+
+export function useSignalSources(signalId: number | null) {
+  return useQuery({
+    queryKey: ["signalSources", signalId],
+    queryFn: () => api.get<SignalSourcesResponse>(`/insight/${signalId}/sources`),
+    enabled: signalId !== null,
+    refetchInterval: (query) =>
+      query.state.data?.sources.some((s) => s.summary_status === "pending") ? 3000 : false,
   });
 }

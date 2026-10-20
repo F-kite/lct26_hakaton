@@ -293,7 +293,7 @@ export default function DevPreviewPage() {
             </div>
           </Block>
           <Block title="SourcesList — 4 источника (RU/EN, разная доверенность)">
-            <SourcesList sources={sources} />
+            <SourcesList sources={sources} allSourcesHref="#" />
           </Block>
         </main>
       </div>

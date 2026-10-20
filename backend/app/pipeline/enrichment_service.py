@@ -28,7 +28,7 @@ _lazy_lock = threading.Lock()
 
 def _get_cached(session: Session, feed_item_id: int) -> EnrichmentResult | None:
     row = session.get(SignalEnrichment, feed_item_id)
-    if row is None or row.model != ENRICHMENT_MODEL:
+    if row is None or row.model != ENRICHMENT_MODEL or row.weak_criteria is None:
         return None
     return EnrichmentResult(
         description=row.description,
@@ -36,6 +36,8 @@ def _get_cached(session: Session, feed_item_id: int) -> EnrichmentResult | None:
         potential_advantage=row.potential_advantage,
         case_example=row.case_example,
         model=row.model,
+        weak_criteria=row.weak_criteria,
+        manifestations=row.manifestations,
     )
 
 
@@ -46,6 +48,8 @@ def _store(feed_item_id: int, result: EnrichmentResult) -> None:
         problem=result.problem,
         potential_advantage=result.potential_advantage,
         case_example=result.case_example,
+        weak_criteria=result.weak_criteria,
+        manifestations=result.manifestations,
     )
     stmt = pg_insert(SignalEnrichment).values(feed_item_id=feed_item_id, **values)
     stmt = stmt.on_conflict_do_update(index_elements=[SignalEnrichment.feed_item_id], set_=values)
@@ -78,16 +82,20 @@ def enrich_cached(
     return result
 
 
+def _is_enriched(signal: Signal) -> bool:
+    return bool(signal.explanation.get("enrichment_model")) and signal.weak_criteria is not None
+
+
 def ensure_enriched(session: Session, signal: Signal) -> None:
     """Дообогатить сигнал при открытии карточки, если описание ещё не
     сгенерировано (исключённые не обогащаются при поиске; также подхватывает
     сигналы, у которых обогащение раньше не удалось)."""
-    if signal.explanation.get("enrichment_model") or not enrichment_available():
+    if _is_enriched(signal) or not enrichment_available():
         return
 
     with _lazy_lock:
         session.refresh(signal)
-        if signal.explanation.get("enrichment_model"):
+        if _is_enriched(signal):
             return
 
         primary = next((ss for ss in signal.sources if ss.is_primary), None)
@@ -106,6 +114,8 @@ def ensure_enriched(session: Session, signal: Signal) -> None:
         signal.problem = result.problem
         signal.potential_advantage = result.potential_advantage
         signal.case_example = result.case_example
+        signal.weak_criteria = result.weak_criteria
+        signal.manifestations = result.manifestations
         explanation = dict(signal.explanation)
         explanation["enrichment_model"] = result.model or ENRICHMENT_MODEL
         signal.explanation = explanation

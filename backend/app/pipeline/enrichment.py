@@ -29,17 +29,24 @@ log = logging.getLogger(__name__)
 REQUEST_TIMEOUT = 120.0 
 
 _SYSTEM_PROMPT = (
-    "Ты помогаешь анализировать технологические тренды для аналитического сервиса. "
-    "На основе ТОЛЬКО предоставленного текста статьи — без использования собственных "
-    "общих знаний о предмете — сформулируй четыре коротких пункта на русском языке: "
-    "описание технологии (что это), какую проблему она решает (конкретное ограничение "
-    "или сложность, которую устраняет технология — должно ОТЛИЧАТЬСЯ от описания, не "
-    "повторяй его другими словами), потенциальное преимущество (какую пользу даёт), "
-    "кейс-пример (конкретный факт применения из текста — компания, продукт, пилот). "
-    "Если в тексте нет данных для какого-то пункта — напиши \"не указано в источнике\" "
-    "для этого пункта, не придумывай. Кейс-пример — только конкретный факт применения "
-    "(компания, продукт, пилот, патент, внедрение); общие возможности технологии кейсом "
-    "не являются. Отвечай строго на русском языке, даже если текст статьи на английском."
+    "Ты помогаешь аналитикам банка разбирать ранние технологические сигналы. Работай ТОЛЬКО "
+    "по предоставленному тексту публикации, без собственных общих знаний. Отвечай строго на "
+    "русском языке, даже если текст на английском.\n"
+    "описание — 1–2 предложения о том, что именно предлагает или исследует эта публикация: "
+    "конкретный метод, устройство, материал или подход и его суть. Опирайся на заголовок. "
+    "Не давай общего определения области (не начинай с «X — это область…»).\n"
+    "проблема — конкретное ограничение, которое устраняет предложенный подход; не повторяй описание.\n"
+    "преимущество — какую пользу даёт подход по тексту.\n"
+    "критерии — 2–4 признака того, что технология на ранней стадии (слабый сигнал), каждый с "
+    "фактом из текста: исследование или прототип, пилот или опытная эксплуатация, грант или "
+    "раннее финансирование, первая демонстрация или новизна подхода, нерешённые ограничения, "
+    "отсутствие массового рынка. Указывай только то, что подтверждается текстом.\n"
+    "проявления — конкретные факты, где технология уже проявилась: компания, продукт, пилот, "
+    "эксперимент, патент, испытание. Каждое проявление — одно законченное предложение с конкретикой (кто, что и где сделал). Если в тексте названы конкретные системы, продукты или проекты — назови их и то, что о них сказано. Общие возможности технологии проявлением не являются. "
+    "Если таких фактов нет — пустой список.\n"
+    "Если исполнитель не назван в тексте (например, «we»), пиши «авторы проекта» или «исследователи»; "
+    "не используй шаблонные подстановки вида {{company}}.\n"
+    "Если для текстового пункта нет данных — напиши \"не указано в источнике\", не придумывай."
 )
 
 _JSON_SCHEMA = {
@@ -48,10 +55,54 @@ _JSON_SCHEMA = {
         "описание": {"type": "string"},
         "проблема": {"type": "string"},
         "преимущество": {"type": "string"},
-        "кейс_пример": {"type": "string"},
+        "критерии": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {"критерий": {"type": "string"}, "факт": {"type": "string"}},
+                "required": ["критерий", "факт"],
+            },
+        },
+        "проявления": {"type": "array", "items": {"type": "string"}},
     },
-    "required": ["описание", "проблема", "преимущество", "кейс_пример"],
+    "required": ["описание", "проблема", "преимущество", "критерии", "проявления"],
 }
+
+NOT_SPECIFIED = "не указано в источнике"
+
+_LEADING_JUNK_RE = re.compile(r"^[\s!•\-–—*·.,:;]+")
+
+
+_PLACEHOLDER_RE = re.compile(r"\{\{[^{}]*\}\}")
+
+
+def clean_item(text: str) -> str:
+    """Убирает мусор в начале пункта («!Loihi», «- …») и делает первую букву заглавной.
+    Пункт с шаблонной заглушкой модели («{{company}}») отбрасывается."""
+    text = _LEADING_JUNK_RE.sub("", text or "").strip()
+    if _PLACEHOLDER_RE.search(text):
+        return ""
+    return text[:1].upper() + text[1:]
+
+
+def clean_criteria(items: list | None) -> list[dict]:
+    cleaned = [
+        {"criterion": clean_item(c.get("criterion", "")), "fact": clean_item(c.get("fact", ""))}
+        for c in items or [] if isinstance(c, dict) and c.get("criterion") and c.get("fact")
+    ]
+    return [c for c in cleaned if c["criterion"] and c["fact"]]
+
+
+def clean_text(text: str | None) -> str | None:
+    return _PLACEHOLDER_RE.sub("авторы проекта", text) if text else text
+
+
+_EMPTY_ITEM_RE = re.compile(r"^(не )?указан\w* в (тексте|источнике)\.?$", re.IGNORECASE)
+
+
+def clean_manifestations(items: list | None) -> list[str]:
+    cleaned = [clean_item(m) for m in items or [] if isinstance(m, str)]
+    return [m for m in cleaned if m and not _EMPTY_ITEM_RE.match(m) and NOT_SPECIFIED not in m.lower()]
 
 
 class EnrichmentResult:
@@ -62,12 +113,16 @@ class EnrichmentResult:
         potential_advantage: str | None,
         case_example: str | None,
         model: str | None = None,
+        weak_criteria: list[dict] | None = None,
+        manifestations: list[str] | None = None,
     ):
         self.description = description
         self.problem = problem
         self.potential_advantage = potential_advantage
         self.case_example = case_example
         self.model = model
+        self.weak_criteria = weak_criteria
+        self.manifestations = manifestations
 
 
 def ollama_available() -> bool:
@@ -110,10 +165,18 @@ def _call_gigachat_json(user_content: str) -> dict | None:
             log.error("gigachat (описание): %s", exc)
             gigachat.mark_down(type(exc).__name__)
             return None
-        if _CYRILLIC_RE.search(parsed.get("описание") or ""):
-            return parsed
-        log.warning("gigachat (описание): ответ не на русском, повтор")
-        content = "Ответ дай строго на русском языке.\n\n" + user_content
+        if not _CYRILLIC_RE.search(parsed.get("описание") or ""):
+            log.warning("gigachat (описание): ответ не на русском, повтор")
+            content = "Ответ дай строго на русском языке.\n\n" + user_content
+            continue
+        if _PLACEHOLDER_RE.search(json.dumps(parsed, ensure_ascii=False)) and attempt < GIGACHAT_ATTEMPTS - 1:
+            log.warning("gigachat (описание): шаблонная заглушка в ответе, повтор")
+            content = (
+                "Не используй шаблонные подстановки вида {{...}}. Если исполнитель не назван в тексте, "
+                "пиши «авторы проекта» или «исследователи».\n\n" + user_content
+            )
+            continue
+        return parsed
     return None
 
 
@@ -175,13 +238,56 @@ def enrich_signal(client: httpx.Client, title: str, source_text: str) -> Enrichm
     if parsed is None:
         return None
 
+    criteria = clean_criteria([
+        {"criterion": c.get("критерий"), "fact": c.get("факт")}
+        for c in parsed.get("критерии") or [] if isinstance(c, dict)
+    ])
+    manifestations = clean_manifestations(parsed.get("проявления"))
     return EnrichmentResult(
-        description=parsed.get("описание"),
-        problem=parsed.get("проблема"),
-        potential_advantage=parsed.get("преимущество"),
-        case_example=parsed.get("кейс_пример"),
+        description=clean_text(parsed.get("описание")),
+        problem=clean_text(parsed.get("проблема")),
+        potential_advantage=clean_text(parsed.get("преимущество")),
+        case_example=manifestations[0] if manifestations else NOT_SPECIFIED,
         model=model,
+        weak_criteria=criteria,
+        manifestations=manifestations,
     )
+
+_SOURCE_SUMMARY_PROMPT = (
+    "Кратко перескажи на русском языке, о чём эта публикация: 1–2 предложения, "
+    "что предлагается или исследуется и главный результат. Только по тексту, "
+    "без собственных знаний и без оценок. Отвечай строго на русском языке."
+)
+_SOURCE_SUMMARY_SCHEMA = {
+    "type": "object",
+    "properties": {"резюме": {"type": "string"}},
+    "required": ["резюме"],
+}
+
+
+def summarize_source_ru(client: httpx.Client, title: str, text: str) -> tuple[str, str] | None:
+    """(резюме, модель): GigaChat, при недоступности — qwen."""
+    user_content = f"Заголовок: {title}\n\nТекст: {text[:4000]}"
+    if _gigachat_ready():
+        from . import gigachat
+
+        try:
+            parsed = gigachat.chat_json(
+                _SOURCE_SUMMARY_PROMPT, user_content, _SOURCE_SUMMARY_SCHEMA, model=ENRICHMENT_MODEL,
+            )
+            summary = (parsed.get("резюме") or "").strip()
+            if _CYRILLIC_RE.search(summary):
+                return summary, ENRICHMENT_MODEL
+        except Exception as exc:
+            log.error("gigachat (резюме источника): %s", exc)
+            gigachat.mark_down(str(exc)[:80])
+    if ollama_available():
+        parsed = _call_ollama_json(client, _SOURCE_SUMMARY_PROMPT, user_content, _SOURCE_SUMMARY_SCHEMA)
+        summary = ((parsed or {}).get("резюме") or "").strip()
+        if summary:
+            return summary, OLLAMA_MODEL
+    return None
+
 
 _TRANSLATE_SYSTEM_PROMPT = (
     "Ты переводишь пользовательские поисковые запросы о технологических трендах "

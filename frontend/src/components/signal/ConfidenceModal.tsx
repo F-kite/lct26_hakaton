@@ -10,6 +10,8 @@ interface Props {
 export default function ConfidenceModal({ signal, onClose }: Props) {
   const pct = Math.round(signal.score * 100);
   const predictors = signal.explanation.key_predictors ?? [];
+  const criteria = signal.weak_criteria ?? [];
+  const manifestations = signal.manifestations ?? [];
   const summary =
     signal.status === "included"
       ? "Вместе эти признаки показывают раннюю стадию развития: интерес к технологии уже растёт, но сформированного рынка и массового внедрения ещё нет."
@@ -24,7 +26,7 @@ export default function ConfidenceModal({ signal, onClose }: Props) {
         className="animate-fade-in glass-frame relative mx-4 w-full max-w-2xl rounded-xl p-2"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="rounded-xl bg-neutral-0 p-7">
+        <div className="max-h-[85vh] overflow-y-auto rounded-xl bg-neutral-0 p-7">
         <button
           type="button"
           onClick={onClose}
@@ -38,12 +40,26 @@ export default function ConfidenceModal({ signal, onClose }: Props) {
           {pct}% — это степень уверенности модели в том, что технология соответствует признакам
           слабого сигнала. Это не оценка качества или зрелости самой технологии.
         </p>
-        {predictors.length > 0 && (
+        {(criteria.length > 0 || predictors.length > 0) && (
           <>
             <h4 className="mt-4 text-xl font-bold text-neutral-950">Что влияет на оценку</h4>
-            <ul className="mt-2 space-y-1 text-sm text-neutral-600">
-              {predictors.map((p) => (
-                <li key={p}>• {p}</li>
+            <ul className="mt-2 space-y-1.5 text-sm text-neutral-600">
+              {criteria.length > 0
+                ? criteria.map((c) => (
+                    <li key={c.criterion}>
+                      • <span className="font-medium text-neutral-950">{c.criterion}:</span> {c.fact}
+                    </li>
+                  ))
+                : predictors.map((p) => <li key={p}>• {p}</li>)}
+            </ul>
+          </>
+        )}
+        {manifestations.length > 0 && (
+          <>
+            <h4 className="mt-4 text-xl font-bold text-neutral-950">Где это уже проявилось</h4>
+            <ul className="mt-2 space-y-1.5 text-sm text-neutral-600">
+              {manifestations.map((m) => (
+                <li key={m}>• {m}</li>
               ))}
             </ul>
           </>

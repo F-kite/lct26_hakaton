@@ -27,6 +27,11 @@ export interface SignalExplanation {
 
 export type SignalStatus = "included" | "excluded";
 
+export interface WeakCriterion {
+  criterion: string;
+  fact: string;
+}
+
 export interface Signal {
   id: number;
   title: string;
@@ -35,6 +40,8 @@ export interface Signal {
   problem: string | null;
   potential_advantage: string | null;
   case_example: string | null;
+  weak_criteria?: WeakCriterion[] | null;
+  manifestations?: string[] | null;
   stage: string | null;
   mention_trend: string | null;
   score: number; // 0..1
@@ -91,4 +98,18 @@ export interface SearchSummaryResponse {
   top_signals: SummarySignal[];
   model?: string | null;
   error?: string | null;
+}
+
+export type SourceSummaryStatus = "ready" | "pending" | "original" | "none";
+
+export interface SignalSourceDetail extends SignalSource {
+  summary: string | null;
+  summary_model: string | null;
+  summary_status: SourceSummaryStatus;
+}
+
+export interface SignalSourcesResponse {
+  signal_id: number;
+  title: string;
+  sources: SignalSourceDetail[];
 }

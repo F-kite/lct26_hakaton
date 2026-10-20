@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 from .db import Signal
+from .pipeline.enrichment import clean_criteria, clean_manifestations
 from .schemas import SignalOut, SignalSourceOut
 
 
@@ -33,6 +34,8 @@ def signal_to_out(signal: Signal) -> SignalOut:
         problem=signal.problem,
         potential_advantage=signal.potential_advantage,
         case_example=signal.case_example,
+        weak_criteria=clean_criteria(signal.weak_criteria) if signal.weak_criteria is not None else None,
+        manifestations=clean_manifestations(signal.manifestations) if signal.manifestations is not None else None,
         stage=signal.stage,
         mention_trend=signal.mention_trend,
         score=signal.score,

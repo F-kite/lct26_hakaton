@@ -26,8 +26,9 @@ export default function SignalDetailPage() {
 
   if (isLoading || !signal) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-neutral-100 text-neutral-500">
-        Загрузка…
+      <div className="flex min-h-screen flex-col items-center justify-center gap-2 bg-neutral-100 text-center text-neutral-500">
+        <p>Готовим отчёт по сигналу…</p>
+        <p className="text-sm">При первом открытии это может занять до 15 секунд.</p>
       </div>
     );
   }
@@ -86,8 +87,15 @@ export default function SignalDetailPage() {
             </div>
 
             <ReasonTags signal={signal} />
-            <CaseExamples text={signal.case_example} primarySource={primarySource} />
-            <SourcesList sources={signal.sources} />
+            <CaseExamples
+              text={signal.case_example}
+              manifestations={signal.manifestations ?? null}
+              primarySource={primarySource}
+            />
+            <SourcesList
+              sources={signal.sources}
+              allSourcesHref={`/results/${queryId}/signals/${signal.id}/sources`}
+            />
           </div>
 
           <div>

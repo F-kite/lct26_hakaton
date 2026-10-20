@@ -1,3 +1,6 @@
+import ChevronDown from "@iconify-react/bi/chevron-down";
+import { useState } from "react";
+
 import { useRetrySummary, useSearchSummary } from "../../api/queries";
 import type { SummarySignal } from "../../api/types";
 
@@ -12,6 +15,25 @@ function pluralQueries(n: number): string {
   if (mod10 === 1 && mod100 !== 11) return "запрос";
   if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return "запроса";
   return "запросов";
+}
+
+const collapsedKey = (queryId: number) => `lct.summaryCollapsed.${queryId}`;
+
+function readCollapsed(queryId: number): boolean {
+  try {
+    return localStorage.getItem(collapsedKey(queryId)) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function writeCollapsed(queryId: number, collapsed: boolean) {
+  try {
+    if (collapsed) localStorage.setItem(collapsedKey(queryId), "1");
+    else localStorage.removeItem(collapsedKey(queryId));
+  } catch {
+    /* приватный режим — состояние просто не запомнится */
+  }
 }
 
 function SignalLink({ signal, onOpen }: { signal: SummarySignal; onOpen: (id: number) => void }) {
@@ -29,6 +51,14 @@ function SignalLink({ signal, onOpen }: { signal: SummarySignal; onOpen: (id: nu
 export default function SearchSummary({ queryId, onOpenSignal }: Props) {
   const { data, isError } = useSearchSummary(queryId, true);
   const retry = useRetrySummary(queryId);
+  const [collapsed, setCollapsed] = useState(() => readCollapsed(queryId));
+
+  const toggle = () => {
+    setCollapsed((c) => {
+      writeCollapsed(queryId, !c);
+      return !c;
+    });
+  };
 
   if (isError || !data || data.status === "disabled" || data.status === "empty") return null;
 
@@ -101,13 +131,23 @@ export default function SearchSummary({ queryId, onOpenSignal }: Props) {
 
   return (
     <section className="glass-card glass-border-8 mt-4 rounded-xl p-6" aria-live="polite">
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-        <h2 className="text-2xl font-bold text-neutral-950">Итоги поиска</h2>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <button
+          type="button"
+          onClick={toggle}
+          aria-expanded={!collapsed}
+          className="flex items-center gap-3 text-left hover:cursor-pointer"
+        >
+          <h2 className="text-2xl font-bold text-neutral-950">Итоги поиска</h2>
+          <ChevronDown
+            className={`h-5 w-5 text-neutral-500 transition-transform ${collapsed ? "-rotate-90" : ""}`}
+          />
+        </button>
         <span className="rounded-md bg-neutral-50 px-2.5 py-1 text-sm text-neutral-600">
           Сгенерировано ИИ{data.model ? ` · ${data.model}` : ""}
         </span>
       </div>
-      {body}
+      {!collapsed && <div className="mt-4">{body}</div>}
     </section>
   );
 }

@@ -187,6 +187,8 @@ def _persist_signal(
         problem=enrichment.problem if enrichment else None,
         potential_advantage=enrichment.potential_advantage if enrichment else None,
         case_example=enrichment.case_example if enrichment else None,
+        weak_criteria=enrichment.weak_criteria if enrichment else None,
+        manifestations=enrichment.manifestations if enrichment else None,
         stage="Ранняя стадия" if status == "included" else None,
         score=result.confidence,
         is_mainstream=_is_mainstream(result),

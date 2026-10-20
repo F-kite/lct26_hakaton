@@ -17,6 +17,10 @@ _EXTRA_COLUMNS = [
     ("search_queries", "date_to", "DATE"),
     ("signal_sources", "is_primary", "BOOLEAN DEFAULT FALSE"),
     ("signal_sources", "relation", "VARCHAR(16)"),
+    ("signals", "weak_criteria", "JSONB"),
+    ("signals", "manifestations", "JSONB"),
+    ("signal_enrichments", "weak_criteria", "JSONB"),
+    ("signal_enrichments", "manifestations", "JSONB"),
 ]
 
 

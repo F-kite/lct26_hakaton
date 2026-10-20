@@ -127,6 +127,8 @@ class Signal(Base):
     problem: Mapped[str | None] = mapped_column(Text)
     potential_advantage: Mapped[str | None] = mapped_column(Text)
     case_example: Mapped[str | None] = mapped_column(Text)
+    weak_criteria: Mapped[list | None] = mapped_column(JSONB)
+    manifestations: Mapped[list | None] = mapped_column(JSONB)
     stage: Mapped[str | None] = mapped_column(String(64))
     mention_trend: Mapped[str | None] = mapped_column(Text)
     score: Mapped[float] = mapped_column(Float)
@@ -168,6 +170,19 @@ class SignalEnrichment(Base):
     problem: Mapped[str | None] = mapped_column(Text)
     potential_advantage: Mapped[str | None] = mapped_column(Text)
     case_example: Mapped[str | None] = mapped_column(Text)
+    weak_criteria: Mapped[list | None] = mapped_column(JSONB)
+    manifestations: Mapped[list | None] = mapped_column(JSONB)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class SourceSummary(Base):
+    """Русскоязычное резюме источника (ТЗ: для зарубежного материала)."""
+
+    __tablename__ = "source_summaries"
+
+    feed_item_id: Mapped[int] = mapped_column(ForeignKey("feed_items.id"), primary_key=True)
+    model: Mapped[str] = mapped_column(String(64))
+    summary: Mapped[str] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 

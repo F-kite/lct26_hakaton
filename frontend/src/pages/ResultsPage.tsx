@@ -9,6 +9,7 @@ import type { Signal } from "../api/types";
 import HistoryButton from "../components/history/HistoryButton";
 import Logo from "../components/Logo";
 import EmptyState from "../components/results/EmptyState";
+import SearchSummary from "../components/results/SearchSummary";
 import SignalsTable from "../components/results/SignalsTable";
 import StatCard from "../components/results/StatCard";
 import SearchInput from "../components/search/SearchInput";
@@ -169,6 +170,11 @@ export default function ResultsPage() {
             hint="Лучшие по результатам ранжирования"
           />
         </div>
+
+        <SearchSummary
+          queryId={status.query_id}
+          onOpenSignal={(signalId) => navigate(`/results/${numericQueryId}/signals/${signalId}`)}
+        />
 
         <div className="glass-element mt-4 rounded-xl p-3">
           {activeList.length !== 0 && (

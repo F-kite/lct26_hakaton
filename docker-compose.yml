@@ -68,6 +68,15 @@ services:
       GITHUB_TOKEN: ${GITHUB_TOKEN:-}
       SEMANTIC_SCHOLAR_API_KEY: ${SEMANTIC_SCHOLAR_API_KEY:-}
       CONTACT_EMAIL: ${CONTACT_EMAIL:-team@example.com}
+      # итоговый вывод по ТОП-15 через GigaChat; без ключа блок вывода отключён
+      GIGACHAT_AUTH_KEY: ${GIGACHAT_AUTH_KEY:-}
+      GIGACHAT_SCOPE: ${GIGACHAT_SCOPE:-GIGACHAT_API_PERS}
+      GIGACHAT_MODEL: ${GIGACHAT_MODEL:-GigaChat-3-Ultra}
+      GIGACHAT_CA_FILE: /certs/russian_trusted_root_ca.pem
+      LLM_TIMEOUT_SECONDS: ${LLM_TIMEOUT_SECONDS:-240}
+    volumes:
+      # корневой сертификат НУЦ Минцифры для TLS к API GigaChat
+      - ./certs:/certs:ro
     ports:
       - "127.0.0.1:9000:8000"
     restart: unless-stopped

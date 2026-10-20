@@ -80,3 +80,22 @@ class SearchStatusResponse(BaseModel):
     error: str | None
     results: list[SignalOut] | None = None
     excluded: list[SignalOut] | None = None
+
+
+class SummarySignalOut(BaseModel):
+    signal_id: int
+    title: str
+    score: float
+    reason: str | None = None  # только у ключевых — пояснение модели
+
+
+class SearchSummaryResponse(BaseModel):
+    # disabled — GigaChat не настроен; empty — нечего обобщать (нет сигналов);
+    # pending — поиск ещё идёт; queued/running/done/failed — состояние вывода
+    status: str
+    queue_position: int | None = None  # сколько задач впереди
+    overview: str | None = None
+    key_signals: list[SummarySignalOut] = Field(default_factory=list)
+    top_signals: list[SummarySignalOut] = Field(default_factory=list)  # по уверенности модели, без LLM
+    model: str | None = None
+    error: str | None = None

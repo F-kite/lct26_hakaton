@@ -69,3 +69,22 @@ export interface SearchStatusResponse {
   results: Signal[] | null;
   excluded: Signal[] | null;
 }
+
+export interface SummarySignal {
+  signal_id: number;
+  title: string;
+  score: number;
+  reason?: string | null;
+}
+
+export type SummaryStatus = "disabled" | "empty" | "pending" | "queued" | "running" | "done" | "failed";
+
+export interface SearchSummaryResponse {
+  status: SummaryStatus;
+  queue_position?: number | null;
+  overview?: string | null;
+  key_signals: SummarySignal[];
+  top_signals: SummarySignal[];
+  model?: string | null;
+  error?: string | null;
+}

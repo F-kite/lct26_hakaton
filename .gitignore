@@ -4,7 +4,6 @@
 # Личный токен Kaggle, не проектный — риск на совести решения оставить его.
 .env
 !getDataset/.env
-*.pem
 *.key
 kaggle.json
 

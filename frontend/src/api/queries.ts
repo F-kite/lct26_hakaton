@@ -2,7 +2,13 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { addHistoryEntry, removeHistoryEntry } from "../lib/history";
 import { api } from "./client";
-import type { SearchCreatedResponse, SearchParams, SearchStatusResponse, Signal } from "./types";
+import type {
+  SearchCreatedResponse,
+  SearchParams,
+  SearchStatusResponse,
+  SearchSummaryResponse,
+  Signal,
+} from "./types";
 
 const POLL_INTERVAL_MS = 3000;
 
@@ -48,5 +54,29 @@ export function useSignalDetail(signalId: number | null) {
     queryKey: ["signal", signalId],
     queryFn: () => api.get<Signal>(`/insight/${signalId}`),
     enabled: signalId !== null,
+  });
+}
+
+const SUMMARY_POLL_INTERVAL_MS = 2000;
+
+export function useSearchSummary(queryId: number | null, enabled: boolean) {
+  return useQuery({
+    queryKey: ["searchSummary", queryId],
+    queryFn: () => api.get<SearchSummaryResponse>(`/search/${queryId}/summary`),
+    enabled: enabled && queryId !== null,
+    refetchInterval: (query) => {
+      const status = query.state.data?.status;
+      return status === "queued" || status === "running" || status === "pending"
+        ? SUMMARY_POLL_INTERVAL_MS
+        : false;
+    },
+  });
+}
+
+export function useRetrySummary(queryId: number | null) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.post<SearchSummaryResponse>(`/search/${queryId}/summary/retry`, {}),
+    onSuccess: (data) => queryClient.setQueryData(["searchSummary", queryId], data),
   });
 }

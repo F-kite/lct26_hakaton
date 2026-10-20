@@ -29,7 +29,15 @@ SEMANTIC_SCHOLAR_API_KEY = os.getenv("SEMANTIC_SCHOLAR_API_KEY")
 GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
 
 # --- обученная модель ---
+# v2 — E5 (смысл запроса и статьи) + классификатор стадии; v1 — TF-IDF + LogReg
+MODEL_VERSION = os.getenv("MODEL_VERSION", "v2")
 MODEL_PATH = os.getenv("MODEL_PATH", "app/models/signal_classifier.pkl")
+MODEL_V2_PATH = os.getenv("MODEL_V2_PATH", "app/models/v2/model.pkl")
+E5_MODEL_DIR = os.getenv("E5_MODEL_DIR", "app/models/v2/encoder")
+# порог смысловой близости запроса и статьи (E5). Аналитик подобрал 0.8 на
+# validation; снижен до 0.79 — у RU-запроса к EN-тексту близость ниже, и 0.8
+# отсекал явно подходящие статьи
+RELEVANCE_THRESHOLD = float(os.getenv("RELEVANCE_THRESHOLD", "0.79"))
 
 # --- LLM-обогащение сигналов (описание/преимущество/кейс-пример, ТЗ) ---
 

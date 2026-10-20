@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from datetime import datetime, timezone
 
 import httpx
@@ -11,6 +12,7 @@ from sqlalchemy.orm import Session
 
 from ..config import (
     MODEL_PATH,
+    MODEL_VERSION,
     OLLAMA_MODEL,
     SEARCH_CANDIDATE_LIMIT,
     SEARCH_EXCLUDED_LIMIT,
@@ -26,14 +28,22 @@ from .classifier import (
     SignalClassifier,
     TrainedModelClassifier,
 )
-from .display_grouping import group_for_display
+from .display_grouping import DisplayGroup, group_for_display
 from .enrichment import enrichment_available, translate_query_to_english
 from .enrichment_service import enrich_cached
 from .live_sources import _detect_language, fetch_all_live, persist_live_items
 
 log = logging.getLogger(__name__)
 
-DEFAULT_CLASSIFIER: SignalClassifier = TrainedModelClassifier(MODEL_PATH)
+def _build_classifier() -> SignalClassifier:
+    if MODEL_VERSION == "v2":
+        from .classifier_v2 import E5SignalClassifier
+
+        return E5SignalClassifier()
+    return TrainedModelClassifier(MODEL_PATH)
+
+
+DEFAULT_CLASSIFIER: SignalClassifier = _build_classifier()
 
 # In-memory отметка отменённых поисков — run_search() выполняется в том же
 # процессе backend'а (FastAPI BackgroundTasks), поэтому БД/новая колонка
@@ -70,6 +80,80 @@ def _feed_item_to_candidate(item: FeedItem) -> SignalCandidate:
 
 def _is_mainstream(result) -> bool:
     return result.explanation.get("predicted_class") == LABEL_MATURE
+
+
+GRANT_SOURCES = {"nsf", "ukri", "cordis"}
+SCIENTIFIC_SOURCES = {"arxiv", "semantic_scholar", "openalex", "crossref"}
+FRESH_DAYS = 365
+
+
+def _signal_predictors(group: DisplayGroup) -> list[str]:
+    """Теги «Ключевые предикторы» для модели v2 — только то, что проверяется
+    по данным: текстовые признаки модели (signals.PATTERNS), типы источников
+    группы и свежесть (число источников видно в отдельной колонке). Порядок — по значимости для
+    ранней стадии (в таблице видны первые два)."""
+    indicators = set(group.result.explanation.get("indicators") or [])
+    sources = {key for member in group.members for key in member.sources}
+    dates = [m.published_at for m in group.members if m.published_at]
+    now = datetime.now(timezone.utc)
+
+    tags = []
+    if sources & GRANT_SOURCES:
+        tags.append("Получен грант")
+    if "early" in indicators:
+        tags.append("Первые пилоты")
+    if "funding" in indicators:
+        tags.append("Привлечены инвестиции")
+    if "research" in indicators:
+        tags.append("Новые исследования")
+    if sources & SCIENTIFIC_SOURCES:
+        tags.append("Научная публикация")
+    if "github" in sources:
+        tags.append("Код в открытом доступе")
+    if dates and (now - max(_aware(d) for d in dates)).days <= FRESH_DAYS:
+        tags.append("Свежая публикация")
+    return tags
+
+
+def _publication_key(candidate: SignalCandidate) -> str:
+    """Одна статья на разных площадках (arXiv, OpenAlex, Crossref…) —
+    одинаковое название с точностью до регистра и пунктуации."""
+    return re.sub(r"\W+", " ", (candidate.title or "").lower()).strip()
+
+
+def _unique_publication_ids(group: DisplayGroup) -> list[int]:
+    """Источники сигнала без дублей одной и той же статьи: из копий с разных
+    площадок оставляем запись представителя группы (её текст ушёл в модель)."""
+    seen = {_publication_key(group.representative)}
+    ids = list(group.representative.feed_item_ids)
+    for member in group.members:
+        key = _publication_key(member)
+        if key not in seen:
+            seen.add(key)
+            ids.extend(member.feed_item_ids)
+    return ids
+
+
+def _dedupe_publications(pairs: list[tuple[SignalCandidate, ScoringResult]]):
+    """Одна и та же статья с разных площадок — одна строка (первая по порядку)."""
+    seen: set[str] = set()
+    unique = []
+    for candidate, result in pairs:
+        key = _publication_key(candidate)
+        if key not in seen:
+            seen.add(key)
+            unique.append((candidate, result))
+    return unique
+
+
+def _aware(d: datetime) -> datetime:
+    return d if d.tzinfo else d.replace(tzinfo=timezone.utc)
+
+
+def _rank_key(result: ScoringResult) -> tuple[float, float]:
+    """v2 сначала по смысловой близости к запросу, потом по уверенности
+    (как SignalAnalyzer.rank у аналитика); у v1 релевантности нет."""
+    return (result.explanation.get("relevance", 0.0), result.confidence)
 
 
 def _was_scored(result: ScoringResult) -> bool:
@@ -177,33 +261,47 @@ def run_search(
         q.phase = "scoring"
         session.commit()
 
-        scored = [(c, classifier.score(c)) for c in candidates]
+        # v2 оценивает всех кандидатов батчем и с учётом исходного (русского)
+        # запроса — E5 мультиязычный, перевод нужен только внешним API
+        if hasattr(classifier, "score_batch"):
+            results = classifier.score_batch(q.query_text, candidates)
+        else:
+            results = [classifier.score(c) for c in candidates]
+        scored = list(zip(candidates, results))
         q.signals_above_75 = sum(1 for _, r in scored if r.confidence >= 0.75)
 
-        passed = [(c, r) for c, r in scored if r.confidence >= SIGNAL_SCORE_THRESHOLD]
-        passed.sort(key=lambda pair: pair[1].confidence, reverse=True)
-
-
-        rejected = [
+        passed = [
             (c, r) for c, r in scored
-            if _was_scored(r) and (r.confidence < SIGNAL_SCORE_THRESHOLD or _is_mainstream(r))
+            if r.is_weak_signal and r.confidence >= SIGNAL_SCORE_THRESHOLD
         ]
-        rejected.sort(key=lambda pair: pair[1].confidence, reverse=True)
-        rejected = rejected[:SEARCH_EXCLUDED_LIMIT]
+        passed.sort(key=lambda pair: _rank_key(pair[1]), reverse=True)
+
+        passed_ids = {id(c) for c, _ in passed}
+        rejected = [(c, r) for c, r in scored if _was_scored(r) and id(c) not in passed_ids]
+        # сначала отклонённые по существу (релевантность, условия, стадия),
+        # потом — по короткому тексту: иначе заголовки без текста, самые
+        # «близкие» к запросу, вытесняют всё остальное
+        rejected.sort(
+            key=lambda pair: (pair[1].explanation.get("enough_text", True), *_rank_key(pair[1])),
+            reverse=True,
+        )
+        rejected = _dedupe_publications(rejected)[:SEARCH_EXCLUDED_LIMIT]
 
         q.phase = "ranking"
         session.commit()
 
         groups = group_for_display(classifier, passed)
-        groups.sort(key=lambda g: g.result.confidence, reverse=True)
+        groups.sort(key=lambda g: _rank_key(g.result), reverse=True)
         top_groups = groups[:SEARCH_TOP_N]
 
         with httpx.Client() as llm_client:
             for group in top_groups:
                 _check_cancelled(query_id)
+                if "indicators" in group.result.explanation:  # модель v2
+                    group.result.explanation["key_predictors"] = _signal_predictors(group)
                 _persist_signal(
                     session, q, group.representative, group.result,
-                    feed_item_ids=group.feed_item_ids, status="included",
+                    feed_item_ids=_unique_publication_ids(group), status="included",
                     classifier=classifier, llm_client=llm_client,
                 )
             for candidate, result in rejected:

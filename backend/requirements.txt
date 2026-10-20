@@ -6,3 +6,7 @@ pydantic==2.9.2
 httpx==0.27.2
 pandas==2.2.3
 scikit-learn==1.9.1
+# модель v2: энкодер E5 (ONNX) + классификатор — версии из комплекта аналитика
+numpy==2.3.5
+fastembed==0.9.0
+onnxruntime==1.31.0

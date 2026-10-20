@@ -7,7 +7,10 @@ export default function ReasonTags({ signal }: { signal: Signal }) {
   const pct = Math.round(signal.score * 100);
   const predicted = signal.explanation.predicted_class;
   const isWeakSignalClass = predicted === "слабый сигнал";
-  const summary = included
+  const reason = signal.explanation.reason; // модель v2 — конкретная причина решения
+  const summary = !included && reason
+    ? reason
+    : included
     ? `Модель определила технологию как слабый сигнал с уверенностью ${pct}% — на основе ключевых упоминаний, которые присутствуют в источнике.`
     : isWeakSignalClass
       ? `Модель распознала признаки слабого сигнала, но с уверенностью всего ${pct}% — ниже порога, необходимого для попадания в выдачу.`

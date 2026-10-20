@@ -168,6 +168,7 @@ export default function ResultsPage() {
             label="Отобрано слабых сигналов"
             value={included.length}
             hint="Лучшие по результатам ранжирования"
+            note={`Из них с уверенностью модели выше 75%: ${included.filter((s) => s.score > 0.75).length}`}
           />
         </div>
 

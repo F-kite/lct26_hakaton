@@ -36,3 +36,6 @@ logs/
 
 # внутренний аудит — не публикуем
 docs/AUDIT.md
+
+# энкодер E5 модели v2 — качается скриптом backend/app/models/v2/download_encoder.py
+backend/app/models/v2/encoder/

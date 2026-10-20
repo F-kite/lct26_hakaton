@@ -19,6 +19,10 @@ export interface SignalExplanation {
   rationale?: string;
   key_predictors?: string[];
   enrichment_model?: string;
+  // модель v2: смысловая близость к запросу и причина решения
+  relevance?: number;
+  reason?: string;
+  passage_hint?: string;
 }
 
 export type SignalStatus = "included" | "excluded";

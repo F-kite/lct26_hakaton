@@ -1,5 +1,5 @@
 """Живой поиск по внешним API во время запроса — arXiv, Semantic Scholar,
-Crossref, OpenAlex, GitHub, Hacker News, NSF, UKRI GtR, CORDIS.
+Crossref, OpenAlex, GitHub, Hacker News, NSF, UKRI GtR, CORDIS, Europe PMC.
 """
 
 from __future__ import annotations
@@ -639,6 +639,58 @@ def fetch_cordis_live(
 
 
 # --------------------------------------------------------------------------
+# Europe PMC — биомедицина и препринты (bioRxiv/medRxiv), ключ не нужен.
+# Аннотация есть только при resultType=core.
+# --------------------------------------------------------------------------
+
+EUROPEPMC_API = "https://www.ebi.ac.uk/europepmc/webservices/rest/search"
+
+
+def fetch_europepmc_live(
+    client: httpx.Client, query: str, *, limit: int = 20,
+    date_from: date | None = None, date_to: date | None = None,
+) -> list[LiveItem]:
+    q = query
+    if date_from or date_to:
+        q += f" AND FIRST_PDATE:[{date_from or '1900-01-01'} TO {date_to or '2999-12-31'}]"
+    params = {"query": q, "resultType": "core", "format": "json", "pageSize": str(limit)}
+    resp = _get(client, f"{EUROPEPMC_API}?{urlencode(params)}")
+    if resp is None or resp.status_code != 200:
+        return []
+    try:
+        results = resp.json().get("resultList", {}).get("result") or []
+    except ValueError:
+        log.error("europepmc: не удалось разобрать ответ как JSON")
+        return []
+
+    items = []
+    for r in results:
+        title = r.get("title")
+        if not title:
+            continue
+        url = (
+            f"https://doi.org/{r['doi']}" if r.get("doi")
+            else f"https://europepmc.org/article/{r.get('source')}/{r.get('id')}"
+        )
+        published_at = None
+        if r.get("firstPublicationDate"):
+            try:
+                published_at = datetime.fromisoformat(r["firstPublicationDate"]).replace(tzinfo=timezone.utc)
+            except ValueError:
+                pass
+        items.append(LiveItem(
+            source_key="europepmc",
+            url=url,
+            title=" ".join(title.split()).rstrip("."),
+            published_at=published_at,
+            summary=" ".join((r.get("abstractText") or "").split()) or None,
+            author=r.get("authorString"),
+            raw_categories=r.get("pubType"),
+        ))
+    return items
+
+
+# --------------------------------------------------------------------------
 # Сводный вызов + персистентность (обогащение БД)
 # --------------------------------------------------------------------------
 
@@ -675,6 +727,10 @@ LIVE_SOURCE_META: dict[str, dict[str, str]] = {
         name="UKRI Gateway to Research", site_url="https://gtr.ukri.org", source_type="grant_database",
         trust_level="high", language="EN", topics="Все",
     ),
+    "europepmc": dict(
+        name="Europe PMC", site_url="https://europepmc.org", source_type="academic_aggregator",
+        trust_level="high", language="EN", topics="Все",
+    ),
     "cordis": dict(
         name="CORDIS (EU)", site_url="https://cordis.europa.eu", source_type="grant_database",
         trust_level="high", language="EN", topics="Все",
@@ -702,6 +758,7 @@ def fetch_all_live(
         ("nsf", fetch_nsf_live),
         ("ukri", fetch_ukri_live),
         ("cordis", fetch_cordis_live),
+        ("europepmc", fetch_europepmc_live),
     ]
 
     with _client() as client:

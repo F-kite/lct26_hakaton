@@ -195,6 +195,97 @@ FEEDS: list[Feed] = [
               "карточки (tc-ai, tc-robotics, tc-vision, tc-motionControl) — "
               "сохраняем как raw_categories.",
     ),
+    # --- добавлено: профессиональные медиа, регулятор, компании-разработчики,
+    # русскоязычные научные медиа (ТЗ: доверенные источники; блоги — индикатор)
+    Feed(
+        key="ieee_spectrum", source_name="IEEE Spectrum",
+        url="https://spectrum.ieee.org/feeds/feed.rss", site_url="https://spectrum.ieee.org",
+        source_type="professional_media", trust_level="high", language="EN",
+        topics=("Роботы", "ИИ-инфра", "Edge", "Индустриальный ИИ"),
+        notes="Журнал IEEE; в ленте полный текст статьи.",
+    ),
+    Feed(
+        key="the_record", source_name="The Record (Recorded Future News)",
+        url="https://therecord.media/feed/", site_url="https://therecord.media",
+        source_type="professional_media", trust_level="medium", language="EN",
+        topics=("Защита ИИ",), notes="Короткие анонсы — в основном как подтверждение.",
+    ),
+    Feed(
+        key="darkreading", source_name="Dark Reading",
+        url="https://www.darkreading.com/rss.xml", site_url="https://www.darkreading.com",
+        source_type="professional_media", trust_level="medium", language="EN",
+        topics=("Защита ИИ",), sponsored_possible=True,
+        notes="Короткие анонсы — в основном как подтверждение.",
+    ),
+    Feed(
+        key="securityweek", source_name="SecurityWeek",
+        url="https://www.securityweek.com/feed/", site_url="https://www.securityweek.com",
+        source_type="professional_media", trust_level="medium", language="EN",
+        topics=("Защита ИИ",), sponsored_possible=True,
+    ),
+    Feed(
+        key="bis_fsi", source_name="BIS — Financial Stability Institute",
+        url="https://www.bis.org/doclist/bis_fsi_publs.rss", site_url="https://www.bis.org/fsi",
+        source_type="international_organization", trust_level="high", language="EN",
+        topics=("Финтех",), notes="Банк международных расчётов: исследования надзора.",
+    ),
+    Feed(
+        key="bis_speeches", source_name="BIS — речи центробанкиров",
+        url="https://www.bis.org/doclist/cbspeeches.rss", site_url="https://www.bis.org/cbspeeches",
+        source_type="international_organization", trust_level="high", language="EN",
+        topics=("Финтех",),
+    ),
+    Feed(
+        key="openai_news", source_name="OpenAI",
+        url="https://openai.com/news/rss.xml", site_url="https://openai.com/news",
+        source_type="company_developer", trust_level="medium", language="EN",
+        topics=("ИИ-инфра", "Защита ИИ"),
+        notes="Сайт компании-разработчика; анонсы короткие.",
+    ),
+    Feed(
+        key="nvidia_dev", source_name="NVIDIA Technical Blog",
+        url="https://developer.nvidia.com/blog/feed", site_url="https://developer.nvidia.com/blog",
+        source_type="company_developer", trust_level="medium", language="EN",
+        topics=("ИИ-инфра", "Edge", "Роботы"),
+    ),
+    Feed(
+        key="aws_ml", source_name="AWS Machine Learning Blog",
+        url="https://aws.amazon.com/blogs/machine-learning/feed/",
+        site_url="https://aws.amazon.com/blogs/machine-learning",
+        source_type="company_developer", trust_level="medium", language="EN",
+        topics=("ИИ-инфра", "Индустриальный ИИ"), sponsored_possible=True,
+    ),
+    Feed(
+        key="bair", source_name="Berkeley AI Research (BAIR)",
+        url="https://bair.berkeley.edu/blog/feed.xml", site_url="https://bair.berkeley.edu/blog",
+        source_type="university", trust_level="high", language="EN",
+        topics=("ИИ-инфра", "Роботы"),
+    ),
+    Feed(
+        key="nplus1", source_name="N + 1",
+        url="https://nplus1.ru/rss", site_url="https://nplus1.ru",
+        source_type="science_media", trust_level="medium", language="RU",
+        topics=("Все",),
+    ),
+    Feed(
+        key="naked_science", source_name="Naked Science",
+        url="https://naked-science.ru/feed", site_url="https://naked-science.ru",
+        source_type="science_media", trust_level="medium", language="RU",
+        topics=("Все",),
+    ),
+    Feed(
+        key="indicator_ru", source_name="Indicator.Ru",
+        url="https://indicator.ru/exports/rss", site_url="https://indicator.ru",
+        source_type="science_media", trust_level="medium", language="RU",
+        topics=("Все",),
+    ),
+    Feed(
+        key="habr", source_name="Хабр",
+        url="https://habr.com/ru/rss/articles/?fl=ru", site_url="https://habr.com",
+        source_type="blog_platform", trust_level="low", language="RU",
+        topics=("ИИ-инфра", "Защита ИИ", "Edge"), is_indicator_only=True,
+        notes="Блог-платформа: только первичный индикатор, нужна кросс-проверка (ТЗ).",
+    ),
 ]
 
 BY_KEY = {f.key: f for f in FEEDS}

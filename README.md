@@ -155,7 +155,7 @@ frontend/                 React + TypeScript + Tailwind интерфейс
 docs/                     техническая документация (пайплайн, диаграмма) и материалы кейса
 certs/                    корневой сертификат НУЦ Минцифры для API GigaChat
 deploy/                   автоматизация деплоя на сервер (nginx, setup-server.sh)
-.sourcecraft/ci.yaml      CI: проверка backend/frontend + сборка Docker-образов
+.sourcecraft/ci.yaml      CI: проверка синтаксиса backend/collector, lint и сборка frontend
 docker-compose.yml        оркестрация всех сервисов
 .env.production.example   шаблон переменных окружения для деплоя
 ```

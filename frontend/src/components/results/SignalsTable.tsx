@@ -3,6 +3,15 @@ import { useMemo, useState } from "react";
 
 import type { Signal } from "../../api/types";
 import { displayTag } from "../../lib/relevance";
+import { isAssessment } from "../../lib/sourceLabels";
+
+function sourcesLabel(n: number): string {
+  const mod10 = n % 10;
+  const mod100 = n % 100;
+  if (mod10 === 1 && mod100 !== 11) return `${n} источник`;
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return `${n} источника`;
+  return `${n} источников`;
+}
 
 interface Props {
   signals: Signal[];
@@ -74,7 +83,7 @@ export default function SignalsTable({ signals, mode, onRowClick }: Props) {
               </td>
               <td className="px-4 py-5 ">
                 <div className="inline-block rounded-md bg-neutral-50 text-neutral-600 text-xs px-2.5 py-1">
-                  {signal.sources.length} {signal.sources.length === 1 ? "источник" : "источников"}
+                  {sourcesLabel(signal.sources.filter((s) => !isAssessment(s.relation)).length)}
                 </div>
               </td>
               <td className="px-4 py-5">

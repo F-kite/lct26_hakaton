@@ -2,10 +2,11 @@ import BrowserEdgeIcon from '@iconify-react/bi/browser-edge';
 import FilterFilledIcon from '@iconify-react/carbon/filter-filled';
 import FileCheckSolidIcon from '@iconify-react/flowbite/file-check-solid';
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { useCancelSearch, useCreateSearch, useSearchStatus } from "../api/queries";
+import HistoryButton from "../components/history/HistoryButton";
 import Logo from "../components/Logo";
 import DateRangeFilter, { isValidRange, type DateRange } from "../components/search/DateRangeFilter";
 import SearchInput from "../components/search/SearchInput";
@@ -27,6 +28,7 @@ export default function SearchHomePage() {
   const [pollingEnabled, setPollingEnabled] = useState(true);
   const [stoppedNotice, setStoppedNotice] = useState(false);
   const [dateRange, setDateRange] = useState<DateRange>({ dateFrom: "", dateTo: "" });
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   const { data: status } = useSearchStatus(activeQueryId, pollingEnabled);
 
@@ -59,14 +61,20 @@ export default function SearchHomePage() {
 
   return (
     <div className="animate-fade-in flex min-h-screen flex-col bg-neutral-100">
-      <header className="px-6 pb-3 pt-7 sm:px-10 xl:px-20">
+      <header className="flex items-center justify-between gap-4 px-6 pb-3 pt-7 sm:px-10 xl:px-20">
         <Logo />
+        <HistoryButton onStartSearch={() => searchInputRef.current?.focus()} />
       </header>
 
       {stoppedNotice && (
-        <div className="fixed right-6 top-15 z-30 max-w-80 rounded-xl bg-neutral-0 px-5 py-5 text-base text-neutral-700 shadow-lg">
+        <button
+          type="button"
+          onClick={() => setStoppedNotice(false)}
+          title="Нажмите, чтобы закрыть"
+          className="fixed right-20 top-22 z-30 max-w-80 rounded-xl bg-neutral-0 px-5 py-5 text-left text-base text-neutral-700 shadow-lg hover:cursor-pointer"
+        >
           Поиск остановлен. Измените запрос или запустите анализ заново.
-        </div>
+        </button>
       )}
 
       <main className="mx-auto flex w-full max-w-4xl flex-1 flex-col items-center justify-center px-6 text-center">
@@ -74,7 +82,7 @@ export default function SearchHomePage() {
         <p className="mt-3 text-xl text-neutral-500">Введите технологическое направление</p>
 
         <div className="mt-11 w-full">
-          <SearchInput size="lg" onSubmit={handleSubmit} />
+          <SearchInput size="lg" inputRef={searchInputRef} onSubmit={handleSubmit} />
         </div>
 
         <div className="mt-5">

@@ -1,11 +1,12 @@
 import FileChartBarSolid from "@iconify-react/flowbite/file-chart-bar-solid";
 import FileCheckSolid from "@iconify-react/flowbite/file-check-solid";
 import FileLineSolid from "@iconify-react/flowbite/file-lines-solid";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
 import { useCancelSearch, useCreateSearch, useSearchStatus } from "../api/queries";
 import type { Signal } from "../api/types";
+import HistoryButton from "../components/history/HistoryButton";
 import Logo from "../components/Logo";
 import EmptyState from "../components/results/EmptyState";
 import SignalsTable from "../components/results/SignalsTable";
@@ -34,9 +35,10 @@ export default function ResultsPage() {
   const numericQueryId = queryId ? Number(queryId) : null;
 
   const [pollingEnabled, setPollingEnabled] = useState(true);
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const [tab, setTab] = useState<Tab>("included");
 
-  const { data: status } = useSearchStatus(numericQueryId, pollingEnabled);
+  const { data: status, isError } = useSearchStatus(numericQueryId, pollingEnabled);
 
   const handleNewSearch = (query: string) => {
     createSearch.mutate({ query, date_from: status?.date_from, date_to: status?.date_to }, {
@@ -51,6 +53,22 @@ export default function ResultsPage() {
     setPollingEnabled(false);
     navigate("/");
   };
+
+  if (!status && isError) {
+    // например, запрос из истории браузера, которого уже нет в БД
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-neutral-100 text-center">
+        <p className="text-neutral-700">Не удалось загрузить результаты этого запроса.</p>
+        <button
+          type="button"
+          onClick={() => navigate("/")}
+          className="rounded-full bg-primary px-6 py-2.5 text-sm text-white"
+        >
+          На главную
+        </button>
+      </div>
+    );
+  }
 
   if (!status) {
     return (
@@ -106,11 +124,18 @@ export default function ResultsPage() {
   return (
     <div className="animate-fade-in min-h-screen bg-neutral-100 pb-16">
       <header className="mx-auto max-w-360 px-6 pb-8 pt-7 sm:px-10">
-        <div className="mx-auto flex max-w-360 flex-col gap-6 sm:flex-row sm:justify-between">
+        <div className="mx-auto flex max-w-360 flex-col gap-8 sm:flex-row sm:items-center sm:justify-between">
           <Logo />
-          <div className="min-w-215 ">
-            <SearchInput size="sm" defaultValue={status.query_text} onSubmit={handleNewSearch} />
+          <div className="w-full sm:max-w-200 sm:flex-1">
+            <SearchInput
+              key={status.query_id} // переход на другой запрос из истории — новый текст в поле
+              size="sm"
+              defaultValue={status.query_text}
+              inputRef={searchInputRef}
+              onSubmit={handleNewSearch}
+            />
           </div>
+          <HistoryButton onStartSearch={() => searchInputRef.current?.focus()} />
         </div>
       </header>
 

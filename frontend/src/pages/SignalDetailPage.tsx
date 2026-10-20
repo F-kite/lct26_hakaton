@@ -1,7 +1,9 @@
+import { useRef } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
 import { useCreateSearch, useSignalDetail } from "../api/queries";
 import Breadcrumbs from "../components/Breadcrumbs";
+import HistoryButton from "../components/history/HistoryButton";
 import Logo from "../components/Logo";
 import CaseExamples from "../components/signal/CaseExamples";
 import ConfidencePanel from "../components/signal/ConfidencePanel";
@@ -13,6 +15,7 @@ export default function SignalDetailPage() {
   const { queryId, signalId } = useParams<{ queryId: string; signalId: string }>();
   const navigate = useNavigate();
   const createSearch = useCreateSearch();
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const { data: signal, isLoading } = useSignalDetail(signalId ? Number(signalId) : null);
 
   const handleNewSearch = (query: string) => {
@@ -35,11 +38,12 @@ export default function SignalDetailPage() {
   return (
     <div className="animate-fade-in min-h-screen bg-neutral-100 pb-16">
       <header className="mx-auto max-w-360 px-6 pb-8 pt-7 sm:px-10">
-        <div className="mx-auto flex max-w-360 flex-col gap-6 sm:flex-row sm:items-center">
+        <div className="mx-auto flex max-w-360 flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
           <Logo />
-          <div className="flex-1">
-            <SearchInput size="sm" onSubmit={handleNewSearch} />
+          <div className="w-full sm:max-w-215 sm:flex-1">
+            <SearchInput size="sm" inputRef={searchInputRef} onSubmit={handleNewSearch} />
           </div>
+          <HistoryButton onStartSearch={() => searchInputRef.current?.focus()} />
         </div>
       </header>
 

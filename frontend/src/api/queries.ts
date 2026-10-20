@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
+import { addHistoryEntry, removeHistoryEntry } from "../lib/history";
 import { api } from "./client";
 import type { SearchCreatedResponse, SearchParams, SearchStatusResponse, Signal } from "./types";
 
@@ -14,7 +15,8 @@ export function useCreateSearch() {
         date_from: params.date_from || null,
         date_to: params.date_to || null,
       }),
-    onSuccess: (data) => {
+    onSuccess: (data, params) => {
+      addHistoryEntry(data.query_id, params.query);
       queryClient.invalidateQueries({ queryKey: ["searchStatus", data.query_id] });
     },
   });
@@ -36,6 +38,8 @@ export function useSearchStatus(queryId: number | null, enabled: boolean) {
 export function useCancelSearch() {
   return useMutation({
     mutationFn: (queryId: number) => api.post<void>(`/search/${queryId}/cancel`, {}),
+    // у остановленного поиска нет результатов — в истории ему делать нечего
+    onMutate: (queryId) => removeHistoryEntry(queryId),
   });
 }
 

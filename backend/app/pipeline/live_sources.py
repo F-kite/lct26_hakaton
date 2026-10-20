@@ -474,13 +474,21 @@ def _relevant(query: str, text: str) -> bool:
 NSF_AWARDS_API = "https://www.research.gov/awardapi-service/v1/awards.json"
 
 
-def fetch_nsf_live(client: httpx.Client, query: str, *, limit: int = 20) -> list[LiveItem]:
+def fetch_nsf_live(
+    client: httpx.Client, query: str, *, limit: int = 20,
+    date_from: date | None = None, date_to: date | None = None,
+) -> list[LiveItem]:
     def search(keyword: str) -> list[dict] | None:
         params = {
             "keyword": keyword,
             "rpp": str(limit),
             "printFields": "id,title,abstractText,date,awardeeName,pdPIName,fundProgramName",
         }
+        # фильтр по дате награды (поле date), формат MM/DD/YYYY
+        if date_from:
+            params["dateStart"] = date_from.strftime("%m/%d/%Y")
+        if date_to:
+            params["dateEnd"] = date_to.strftime("%m/%d/%Y")
         resp = _get(client, f"{NSF_AWARDS_API}?{urlencode(params)}")
         if resp is None or resp.status_code != 200:
             return None
@@ -526,7 +534,10 @@ def fetch_nsf_live(client: httpx.Client, query: str, *, limit: int = 20) -> list
 UKRI_GTR_API = "https://gtr.ukri.org/gtr/api/projects"
 
 
-def fetch_ukri_live(client: httpx.Client, query: str, *, limit: int = 20) -> list[LiveItem]:
+def fetch_ukri_live(
+    client: httpx.Client, query: str, *, limit: int = 20,
+    date_from: date | None = None, date_to: date | None = None,  # фильтрует fetch_all_live
+) -> list[LiveItem]:
     # GtR отклоняет размер страницы меньше 10
     params = {"q": query, "s": str(max(limit, 10))}
     resp = _get(
@@ -572,7 +583,10 @@ def fetch_ukri_live(client: httpx.Client, query: str, *, limit: int = 20) -> lis
 CORDIS_SEARCH_API = "https://cordis.europa.eu/search/en"
 
 
-def fetch_cordis_live(client: httpx.Client, query: str, *, limit: int = 20) -> list[LiveItem]:
+def fetch_cordis_live(
+    client: httpx.Client, query: str, *, limit: int = 20,
+    date_from: date | None = None, date_to: date | None = None,  # фильтрует fetch_all_live
+) -> list[LiveItem]:
     def search(terms: str) -> list[dict] | None:
         # без contenttype='project' поиск отдаёт новостные статьи на разных языках
         params = {"q": f"contenttype='project' AND {terms}", "format": "json", "num": str(limit)}
@@ -610,10 +624,14 @@ def fetch_cordis_live(client: httpx.Client, query: str, *, limit: int = 20) -> l
             except ValueError:
                 pass
         acronym = project.get("acronym")
+        title = " ".join(title.split())
+        # у части проектов аббревиатура уже есть в начале названия
+        if acronym and not title.lower().startswith(acronym.lower()):
+            title = f"{acronym}: {title}"
         items.append(LiveItem(
             source_key="cordis",
             url=f"https://cordis.europa.eu/project/id/{project_id}",
-            title=f"{acronym}: {' '.join(title.split())}" if acronym else " ".join(title.split()),
+            title=title,
             published_at=published_at,
             summary=" ".join((project.get("objective") or project.get("teaser") or "").split()) or None,
         ))

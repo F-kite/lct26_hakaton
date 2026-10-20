@@ -1,9 +1,4 @@
-"""Скачать энкодер E5 для модели v2 и сверить sha256.
-
-Файлы байт в байт совпадают с intfloat/multilingual-e5-small на Hugging Face
-(проверено по комплекту аналитика), поэтому 135 МБ не храним в git, а качаем
-по зафиксированной ревизии. Запуск: python -m app.models.v2.download_encoder [папка]
-"""
+"""Скачать энкодер E5 для модели v2 и сверить sha256."""
 
 from __future__ import annotations
 
@@ -15,7 +10,6 @@ from pathlib import Path
 REPO = "intfloat/multilingual-e5-small"
 REVISION = "614241f622f53c4eeff9890bdc4f31cfecc418b3"
 
-# путь в репозитории HF -> (путь в папке энкодера, sha256)
 FILES = {
     "config.json": ("config.json", "69137736cab8b8903a07fe8afaafdda25aac55415a12a55d1bffa9f581abf959"),
     "special_tokens_map.json": ("special_tokens_map.json", "d05497f1da52c5e09554c0cd874037a083e1dc1b9cfd48034d1c717f1afc07a7"),

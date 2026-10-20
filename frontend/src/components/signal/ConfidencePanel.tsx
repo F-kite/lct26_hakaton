@@ -9,7 +9,7 @@ export default function ConfidencePanel({ signal }: { signal: Signal }) {
   const predicted = signal.explanation.predicted_class;
   const isWeakSignalClass = predicted === "слабый сигнал";
 
-  const reason = signal.explanation.reason; // модель v2 — конкретная причина решения
+  const reason = signal.explanation.reason;
   const description =
     signal.status === "excluded"
       ? reason

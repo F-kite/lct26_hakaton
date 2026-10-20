@@ -5,7 +5,7 @@ interface Props {
   label: string;
   value: number;
   hint: string;
-  note?: string; // дополнительная строка под подписью
+  note?: string;
 }
 
 export default function StatCard({ icon: Icon, label, value, hint, note }: Props) {

@@ -21,7 +21,7 @@ class DisplayGroup:
     representative: SignalCandidate  # кандидат с максимальным score в группе
     result: ScoringResult            # его оценка — представляет группу целиком
     feed_item_ids: list[int]         # объединённые ID всех членов группы
-    members: list[SignalCandidate] = field(default_factory=list)  # все кандидаты группы
+    members: list[SignalCandidate] = field(default_factory=list)
 
 
 def group_for_display(
@@ -76,9 +76,6 @@ def group_for_display(
 
 
 def _group_by_title(scored: list[tuple[SignalCandidate, ScoringResult]]) -> list[DisplayGroup]:
-    """Модель v2 (без TF-IDF): склеиваем только одинаковые по названию записи,
-    как SignalAnalyzer.rank у аналитика. E5-векторы для порога близости не
-    годятся — у них почти любые тексты одной темы близки (косинус 0.77–0.87)."""
     groups: dict[str, DisplayGroup] = {}
     for candidate, result in scored:
         key = re.sub(r"\W+", " ", (candidate.title or "").lower()).strip()

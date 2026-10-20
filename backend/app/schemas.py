@@ -44,6 +44,7 @@ class SignalSourceOut(BaseModel):
     language: str
     published_at: datetime | None
     is_primary: bool
+    relation: str | None = None
 
 
 class SignalOut(BaseModel):
@@ -86,16 +87,14 @@ class SummarySignalOut(BaseModel):
     signal_id: int
     title: str
     score: float
-    reason: str | None = None  # только у ключевых — пояснение модели
+    reason: str | None = None
 
 
 class SearchSummaryResponse(BaseModel):
-    # disabled — GigaChat не настроен; empty — нечего обобщать (нет сигналов);
-    # pending — поиск ещё идёт; queued/running/done/failed — состояние вывода
     status: str
-    queue_position: int | None = None  # сколько задач впереди
+    queue_position: int | None = None
     overview: str | None = None
     key_signals: list[SummarySignalOut] = Field(default_factory=list)
-    top_signals: list[SummarySignalOut] = Field(default_factory=list)  # по уверенности модели, без LLM
+    top_signals: list[SummarySignalOut] = Field(default_factory=list)
     model: str | None = None
     error: str | None = None

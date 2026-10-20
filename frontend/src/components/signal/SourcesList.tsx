@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 
 import type { SignalSource } from "../../api/types";
+import { relationLabel, sourceTypeLabel } from "../../lib/sourceLabels";
 
 const PREVIEW_COUNT = 3;
 
@@ -22,6 +23,7 @@ function dateParts(iso: string | null): { day: string; month: string; year: stri
 
 function SourceCard({ source }: { source: SignalSource }) {
   const date = dateParts(source.published_at);
+  const relation = relationLabel(source.relation, source.is_primary);
   return (
     <div className="glass-card glass-border-8 rounded-2xl p-5">
       <div className="flex flex-col gap-5 sm:flex-row sm:gap-0">
@@ -46,8 +48,17 @@ function SourceCard({ source }: { source: SignalSource }) {
               {source.source_name}
             </span>
             <span className="rounded-md bg-neutral-50 px-2.5 py-1 text-sm text-neutral-600">
-              {source.source_type}
+              {sourceTypeLabel(source.source_type)}
             </span>
+            {relation && (
+              <span
+                className={`rounded-md px-2.5 py-1 text-sm ${
+                  source.is_primary ? "bg-primary-50 text-primary" : "bg-neutral-50 text-neutral-600"
+                }`}
+              >
+                {relation}
+              </span>
+            )}
           </div>
           <a
             href={source.url}
@@ -87,7 +98,9 @@ export default function SourcesList({ sources }: SourcesListProps) {
   const sorted = useMemo(
     () =>
       [...sources].sort(
-        (a, b) => new Date(b.published_at ?? 0).getTime() - new Date(a.published_at ?? 0).getTime(),
+        (a, b) =>
+          Number(b.is_primary) - Number(a.is_primary) ||
+          new Date(b.published_at ?? 0).getTime() - new Date(a.published_at ?? 0).getTime(),
       ),
     [sources],
   );

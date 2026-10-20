@@ -195,8 +195,6 @@ FEEDS: list[Feed] = [
               "карточки (tc-ai, tc-robotics, tc-vision, tc-motionControl) — "
               "сохраняем как raw_categories.",
     ),
-    # --- добавлено: профессиональные медиа, регулятор, компании-разработчики,
-    # русскоязычные научные медиа (ТЗ: доверенные источники; блоги — индикатор)
     Feed(
         key="ieee_spectrum", source_name="IEEE Spectrum",
         url="https://spectrum.ieee.org/feeds/feed.rss", site_url="https://spectrum.ieee.org",

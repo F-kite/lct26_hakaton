@@ -1,11 +1,4 @@
-"""Модель v2 (комплект аналитика, app/models/v2): E5 сравнивает смысл
-запроса и статьи, обученный классификатор определяет стадию технологии,
-условия запроса («для банков», «чипы»…) проверяются по тексту.
-
-Код аналитика (signals.py, relevance.py) не меняем — используем его функции.
-Логика SignalAnalyzer.analyze() повторена здесь, чтобы порог релевантности
-брался из настроек, а оценка шла одним батчем по всем кандидатам.
-"""
+"""Модель v2 (комплект аналитика, app/models/v2): E5 сравнивает смысл."""
 
 from __future__ import annotations
 
@@ -19,20 +12,32 @@ from .classifier import ScoringResult, SignalCandidate
 
 log = logging.getLogger(__name__)
 
-MIN_WORDS = 60  # правило аналитика: короче — «Недостаточно текста»
+MIN_WORDS = 60
 E5_MODEL_NAME = "local/multilingual-e5-small-int8"
 
 _TAG_RE = re.compile(r"<[^>]+>")
 
-# короткие теги причины исключения для таблицы «Исключённые»
 REASON_TAGS = {
     "short": "Мало текста",
     "conditions": "Не подтверждены условия",
     "review": "Требует проверки",
     "relevance": "Низкая релевантность",
-    "stage": None,  # подставляется класс модели
+    "stage": None,
     "uncertain": "Неуверенная стадия",
 }
+
+
+PASSAGE_HINT_WORDS = 40
+
+
+def _passage_hint(passage: str, clean_title: str) -> str | None:
+    prefix = f"{clean_title}. "
+    body = passage[len(prefix):] if passage.startswith(prefix) else passage
+    words = body.split()
+    if not words:
+        return None
+    hint = " ".join(words[:PASSAGE_HINT_WORDS])
+    return hint + ("…" if len(words) > PASSAGE_HINT_WORDS else "")
 
 
 def _load_encoder():
@@ -52,8 +57,6 @@ def _load_encoder():
 
 
 class E5SignalClassifier:
-    """Модель v2. В отличие от v1 оценивает кандидатов батчем и с учётом
-    запроса (score_batch), а не по одному."""
 
     model_version = "e5-logreg-v2"
 
@@ -63,7 +66,7 @@ class E5SignalClassifier:
         self._signals = signals
         self._relevance = relevance
         with open(MODEL_V2_PATH, "rb") as f:
-            artifact = pickle.load(f)  # комплект от аналитика команды — доверенный
+            artifact = pickle.load(f)
         self._clf = artifact["classifier"]
         self._stage_threshold = float(artifact["threshold"])
         self._encoder = _load_encoder()
@@ -71,6 +74,10 @@ class E5SignalClassifier:
             "модель v2 загружена: классы %s, порог стадии %.2f, порог релевантности %.2f",
             list(self._clf.classes_), self._stage_threshold, RELEVANCE_THRESHOLD,
         )
+
+    @property
+    def encoder(self):
+        return self._encoder
 
     def score(self, candidate: SignalCandidate) -> ScoringResult:
         raise NotImplementedError("модель v2 оценивает с учётом запроса — используйте score_batch")
@@ -99,7 +106,6 @@ class E5SignalClassifier:
                 rel["relevant"] and label == "weak" and weak >= self._stage_threshold and enough_text
             )
 
-            # порядок проверок — как в SignalAnalyzer.analyze()
             if not enough_text:
                 reason, tag = "Недостаточно текста: нужен текст публикации, не только заголовок.", REASON_TAGS["short"]
             elif rel["missing_conditions"]:
@@ -117,8 +123,6 @@ class E5SignalClassifier:
             else:
                 reason, tag = "Соответствует запросу; модель относит публикацию к слабым сигналам.", None
 
-            # сработавшие текстовые признаки модели; теги-предикторы принятых
-            # сигналов собирает оркестратор (нужны источники всей группы)
             fired = s.indicators(f"{article['title']} {article['text']}")
             indicators = [name for name, value in zip(s.PATTERNS, fired) if value > 0]
             relevance_tag = f"Релевантность {math.ceil(rel['relevance'] * 100)}%"
@@ -137,8 +141,7 @@ class E5SignalClassifier:
                     "reason": reason,
                     "key_predictors": key_predictors,
                     "indicators": indicators,
-                    # фрагмент статьи, ближайший к запросу — помогает найти место в источнике
-                    "passage_hint": " ".join(passages[rel["best_passage_index"]].split()[:18]),
+                    "passage_hint": _passage_hint(passages[rel["best_passage_index"]], s.clean(article["title"])),
                     "rationale": (
                         f"Модель v2 (E5 + классификатор стадии): класс «{s.LABELS[label]}», "
                         f"P(слабый сигнал)={weak:.2f}, релевантность запросу {rel['relevance']:.2f}."

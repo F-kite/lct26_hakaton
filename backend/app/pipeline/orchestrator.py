@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 from ..config import (
     MODEL_PATH,
     MODEL_VERSION,
-    OLLAMA_MODEL,
+    ENRICHMENT_MODEL,
     SEARCH_CANDIDATE_LIMIT,
     SEARCH_EXCLUDED_LIMIT,
     SEARCH_TOP_N,
@@ -21,6 +21,7 @@ from ..config import (
 )
 from ..db import FeedItem, SearchQuery, Signal, SignalSource
 from .candidates import find_candidates
+from .corroboration import Corroboration, corroborate
 from .classifier import (
     LABEL_MATURE,
     ScoringResult,
@@ -29,7 +30,7 @@ from .classifier import (
     TrainedModelClassifier,
 )
 from .display_grouping import DisplayGroup, group_for_display
-from .enrichment import enrichment_available, translate_query_to_english
+from .enrichment import translate_query_to_english, translation_available
 from .enrichment_service import enrich_cached
 from .live_sources import _detect_language, fetch_all_live, persist_live_items
 
@@ -83,15 +84,11 @@ def _is_mainstream(result) -> bool:
 
 
 GRANT_SOURCES = {"nsf", "ukri", "cordis"}
-SCIENTIFIC_SOURCES = {"arxiv", "semantic_scholar", "openalex", "crossref"}
+SCIENTIFIC_SOURCES = {"arxiv", "semantic_scholar", "openalex", "crossref", "europepmc"}
 FRESH_DAYS = 365
 
 
-def _signal_predictors(group: DisplayGroup) -> list[str]:
-    """Теги «Ключевые предикторы» для модели v2 — только то, что проверяется
-    по данным: текстовые признаки модели (signals.PATTERNS), типы источников
-    группы и свежесть (число источников видно в отдельной колонке). Порядок — по значимости для
-    ранней стадии (в таблице видны первые два)."""
+def _signal_predictors(group: DisplayGroup, corroboration: Corroboration | None = None) -> list[str]:
     indicators = set(group.result.explanation.get("indicators") or [])
     sources = {key for member in group.members for key in member.sources}
     dates = [m.published_at for m in group.members if m.published_at]
@@ -108,6 +105,8 @@ def _signal_predictors(group: DisplayGroup) -> list[str]:
         tags.append("Новые исследования")
     if sources & SCIENTIFIC_SOURCES:
         tags.append("Научная публикация")
+    if corroboration is not None and corroboration.citation_growth:
+        tags.append("Рост цитирований")
     if "github" in sources:
         tags.append("Код в открытом доступе")
     if dates and (now - max(_aware(d) for d in dates)).days <= FRESH_DAYS:
@@ -116,14 +115,10 @@ def _signal_predictors(group: DisplayGroup) -> list[str]:
 
 
 def _publication_key(candidate: SignalCandidate) -> str:
-    """Одна статья на разных площадках (arXiv, OpenAlex, Crossref…) —
-    одинаковое название с точностью до регистра и пунктуации."""
     return re.sub(r"\W+", " ", (candidate.title or "").lower()).strip()
 
 
 def _unique_publication_ids(group: DisplayGroup) -> list[int]:
-    """Источники сигнала без дублей одной и той же статьи: из копий с разных
-    площадок оставляем запись представителя группы (её текст ушёл в модель)."""
     seen = {_publication_key(group.representative)}
     ids = list(group.representative.feed_item_ids)
     for member in group.members:
@@ -135,7 +130,6 @@ def _unique_publication_ids(group: DisplayGroup) -> list[int]:
 
 
 def _dedupe_publications(pairs: list[tuple[SignalCandidate, ScoringResult]]):
-    """Одна и та же статья с разных площадок — одна строка (первая по порядку)."""
     seen: set[str] = set()
     unique = []
     for candidate, result in pairs:
@@ -151,8 +145,6 @@ def _aware(d: datetime) -> datetime:
 
 
 def _rank_key(result: ScoringResult) -> tuple[float, float]:
-    """v2 сначала по смысловой близости к запросу, потом по уверенности
-    (как SignalAnalyzer.rank у аналитика); у v1 релевантности нет."""
     return (result.explanation.get("relevance", 0.0), result.confidence)
 
 
@@ -175,6 +167,7 @@ def _persist_signal(
     classifier: SignalClassifier,
     llm_client: httpx.Client,
     allow_llm: bool = True,
+    extra_sources: list[tuple[int, str]] = (),
 ) -> None:
     # Исключённые при поиске обогащаются только из кэша (бесплатно);
     # недостающее досчитывается лениво при открытии карточки.
@@ -185,7 +178,7 @@ def _persist_signal(
 
     explanation = dict(result.explanation)
     if enrichment is not None:
-        explanation["enrichment_model"] = OLLAMA_MODEL
+        explanation["enrichment_model"] = enrichment.model or ENRICHMENT_MODEL
 
     signal = Signal(
         query_id=q.id,
@@ -204,11 +197,19 @@ def _persist_signal(
     session.add(signal)
     session.flush()
     primary_feed_item_id = candidate.feed_item_ids[0]
-    for feed_item_id in feed_item_ids:
+    linked = [
+        (fid, "primary" if fid == primary_feed_item_id else "similar") for fid in feed_item_ids
+    ] + list(extra_sources)
+    seen: set[int] = set()
+    for feed_item_id, relation in linked:
+        if feed_item_id in seen:
+            continue
+        seen.add(feed_item_id)
         session.add(SignalSource(
             signal_id=signal.id,
             feed_item_id=feed_item_id,
             is_primary=(feed_item_id == primary_feed_item_id),
+            relation=relation,
         ))
 
 
@@ -233,7 +234,7 @@ def run_search(
         _check_cancelled(query_id)
 
         search_query_text = q.query_text
-        if _detect_language(q.query_text) != "EN" and enrichment_available():
+        if _detect_language(q.query_text) != "EN" and translation_available():
             with httpx.Client() as translate_client:
                 translated = translate_query_to_english(translate_client, q.query_text)
             if translated:
@@ -261,8 +262,6 @@ def run_search(
         q.phase = "scoring"
         session.commit()
 
-        # v2 оценивает всех кандидатов батчем и с учётом исходного (русского)
-        # запроса — E5 мультиязычный, перевод нужен только внешним API
         if hasattr(classifier, "score_batch"):
             results = classifier.score_batch(q.query_text, candidates)
         else:
@@ -278,9 +277,6 @@ def run_search(
 
         passed_ids = {id(c) for c, _ in passed}
         rejected = [(c, r) for c, r in scored if _was_scored(r) and id(c) not in passed_ids]
-        # сначала отклонённые по существу (релевантность, условия, стадия),
-        # потом — по короткому тексту: иначе заголовки без текста, самые
-        # «близкие» к запросу, вытесняют всё остальное
         rejected.sort(
             key=lambda pair: (pair[1].explanation.get("enough_text", True), *_rank_key(pair[1])),
             reverse=True,
@@ -294,15 +290,24 @@ def run_search(
         groups.sort(key=lambda g: _rank_key(g.result), reverse=True)
         top_groups = groups[:SEARCH_TOP_N]
 
+        _check_cancelled(query_id)
+        primary_urls = [
+            (session.get(FeedItem, g.representative.feed_item_ids[0]).url or "") for g in top_groups
+        ]
+        corroborations = corroborate(
+            session, getattr(classifier, "encoder", None), top_groups, candidates, primary_urls,
+        )
+
         with httpx.Client() as llm_client:
-            for group in top_groups:
+            for group, corroboration in zip(top_groups, corroborations):
                 _check_cancelled(query_id)
-                if "indicators" in group.result.explanation:  # модель v2
-                    group.result.explanation["key_predictors"] = _signal_predictors(group)
+                if "indicators" in group.result.explanation:
+                    group.result.explanation["key_predictors"] = _signal_predictors(group, corroboration)
                 _persist_signal(
                     session, q, group.representative, group.result,
                     feed_item_ids=_unique_publication_ids(group), status="included",
                     classifier=classifier, llm_client=llm_client,
+                    extra_sources=corroboration.sources,
                 )
             for candidate, result in rejected:
                 _check_cancelled(query_id)

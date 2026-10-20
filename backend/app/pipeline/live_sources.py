@@ -19,7 +19,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from ..config import CONTACT_EMAIL, GITHUB_TOKEN, SEMANTIC_SCHOLAR_API_KEY
+from ..config import CONTACT_EMAIL, GITHUB_TOKEN, OPENALEX_API_KEY, SEMANTIC_SCHOLAR_API_KEY
 from ..db import FeedItem, Source
 
 log = logging.getLogger(__name__)
@@ -271,6 +271,14 @@ def search_crossref_live(
 OPENALEX_API = "https://api.openalex.org/works"
 
 
+def openalex_params(params: dict) -> dict:
+    """mailto — «вежливый» пул; api_key — бюджет и лимит в 10 раз выше бесплатного."""
+    params = {**params, "mailto": CONTACT_EMAIL}
+    if OPENALEX_API_KEY:
+        params["api_key"] = OPENALEX_API_KEY
+    return params
+
+
 def _reconstruct_openalex_abstract(inverted_index: dict[str, list[int]] | None) -> str | None:
     """OpenAlex не отдаёт abstract текстом (авторское право) — только
     inverted index: слово -> список позиций в тексте. Собираем обратно."""
@@ -289,7 +297,7 @@ def fetch_openalex_live(
     client: httpx.Client, query: str, *, per_page: int = 25,
     date_from: date | None = None, date_to: date | None = None, language: str | None = None,
 ) -> list[LiveItem]:
-    params = {"search": query, "per-page": str(per_page), "mailto": CONTACT_EMAIL}
+    params = openalex_params({"search": query, "per-page": str(per_page)})
     filters = [f"language:{language}"] if language else []
     if date_from:
         filters.append(f"from_publication_date:{date_from}")
@@ -626,6 +634,83 @@ def fetch_openalex_ru_live(
     return fetch_openalex_live(client, query, date_from=date_from, date_to=date_to, language="ru")
 
 
+_CJK_RE = re.compile(r"[぀-ヿ㐀-鿿가-힯]")
+_NOT_ANALYTICS_RE = re.compile(
+    r"deliverable|work ?package|\bwp ?\d|progress report|periodic report|final report of|"
+    r"annual report|minutes of|thesis|dissertation|data ?set|supplementary",
+    re.IGNORECASE,
+)
+ANALYST_SOURCE_KEYS = {
+    "openalex_reports", "mckinsey", "stanford_hai", "hse_expertise", "bis_fsi", "bis_speeches", "fsisac",
+}
+
+
+def fetch_openalex_reports_live(
+    client: httpx.Client, query: str, *, per_page: int = 15,
+    date_from: date | None = None, date_to: date | None = None, language: str | None = None,
+) -> list[LiveItem]:
+    filters = ["type:report"]
+    if language:
+        filters.append(f"language:{language}")
+    if date_from:
+        filters.append(f"from_publication_date:{date_from}")
+    if date_to:
+        filters.append(f"to_publication_date:{date_to}")
+    params = openalex_params({"search": query, "per-page": str(per_page), "filter": ",".join(filters)})
+    resp = _get(client, f"{OPENALEX_API}?{urlencode(params)}")
+    if resp is None or resp.status_code != 200:
+        return []
+    try:
+        works = resp.json().get("results") or []
+    except ValueError:
+        return []
+
+    items = []
+    for work in works:
+        title = work.get("title") or work.get("display_name")
+        url = work.get("doi") or (work.get("primary_location") or {}).get("landing_page_url") or work.get("id")
+        summary = _reconstruct_openalex_abstract(work.get("abstract_inverted_index"))
+        if not title or not url or not summary or _NOT_ANALYTICS_RE.search(title) or _CJK_RE.search(title):
+            continue
+        published_at = None
+        if work.get("publication_date"):
+            try:
+                published_at = datetime.fromisoformat(work["publication_date"]).replace(tzinfo=timezone.utc)
+            except ValueError:
+                pass
+        publisher = ((work.get("primary_location") or {}).get("source") or {}).get("display_name")
+        items.append(LiveItem(
+            source_key="openalex_reports",
+            url=url,
+            title=" ".join(title.split()),
+            published_at=published_at,
+            summary=summary,
+            author=publisher,
+            raw_categories="report",
+        ))
+    return items
+
+
+def fetch_analyst_reports(
+    query: str, original_query: str | None = None,
+    date_from: date | None = None, date_to: date | None = None,
+) -> list[LiveItem]:
+    """Отчёты по запросу — отдельно от кандидатов: они оценивают сигналы, а не конкурируют с ними."""
+    jobs = [(query, "en")]
+    if original_query and _CYRILLIC_RE.search(original_query):
+        jobs.append((original_query, "ru"))
+    found: list[LiveItem] = []
+    with _client() as client:
+        for q, lang in jobs:
+            try:
+                items = fetch_openalex_reports_live(client, q, date_from=date_from, date_to=date_to, language=lang)
+                log.info("[openalex_reports%s] отчётов: %d", f"_{lang}" if lang else "", len(items))
+                found += items
+            except Exception as exc:
+                log.error("[openalex_reports] упал: %s", exc)
+    return found
+
+
 CYBERLENINKA_API = "https://cyberleninka.ru/api/search"
 
 
@@ -757,6 +842,10 @@ LIVE_SOURCE_META: dict[str, dict[str, str]] = {
     "europepmc": dict(
         name="Europe PMC", site_url="https://europepmc.org", source_type="academic_aggregator",
         trust_level="high", language="EN", topics="Все",
+    ),
+    "openalex_reports": dict(
+        name="OpenAlex — отчёты", site_url="https://openalex.org", source_type="analytical_report",
+        trust_level="medium", language="EN", topics="Все",
     ),
     "cyberleninka": dict(
         name="КиберЛенинка", site_url="https://cyberleninka.ru", source_type="academic_aggregator",

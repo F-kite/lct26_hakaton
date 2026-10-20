@@ -13,6 +13,7 @@ export default function App() {
       <Route path="/results/:queryId" element={<ResultsPage />} />
       <Route path="/results/:queryId/signals/:signalId" element={<SignalDetailPage />} />
       <Route path="/results/:queryId/signals/:signalId/sources" element={<SignalSourcesPage />} />
+      <Route path="/results/:queryId/signals/:signalId/analysts" element={<SignalSourcesPage kind="analysts" />} />
       <Route path="*" element={<NotFoundPage />} />
     </Routes>
   );

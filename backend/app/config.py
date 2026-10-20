@@ -28,6 +28,8 @@ SEMANTIC_SCHOLAR_API_KEY = os.getenv("SEMANTIC_SCHOLAR_API_KEY")
 
 GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
 
+OPENALEX_API_KEY = os.getenv("OPENALEX_API_KEY", "").strip()
+
 # --- обученная модель ---
 MODEL_VERSION = os.getenv("MODEL_VERSION", "v2")
 MODEL_PATH = os.getenv("MODEL_PATH", "app/models/signal_classifier.pkl")

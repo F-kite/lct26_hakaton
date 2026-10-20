@@ -12,16 +12,18 @@ from urllib.parse import urlencode
 import numpy as np
 from sqlalchemy.orm import Session
 
-from ..config import CONTACT_EMAIL
+from ..config import RELEVANCE_THRESHOLD
 from .candidates import find_candidates
 from .classifier import SignalCandidate
 from .display_grouping import DisplayGroup
 from .live_sources import (
+    ANALYST_SOURCE_KEYS,
     OPENALEX_API,
     LiveItem,
     _client,
     _get,
     _reconstruct_openalex_abstract,
+    openalex_params,
     persist_live_items,
 )
 
@@ -31,7 +33,6 @@ SIMILAR_MIN = 0.90
 SIMILAR_PERCENTILE = 99
 MAX_SIMILAR = 4
 MAX_CITING = 3
-MAX_RELATED = 2
 TARGETED_DB_LIMIT = 30
 TEXT_WORDS = 150
 
@@ -110,7 +111,7 @@ WORK_FIELDS = "id,doi,title,publication_date,abstract_inverted_index,counts_by_y
 
 
 def _openalex_get(client, path: str, params: dict) -> dict | None:
-    params = {**params, "mailto": CONTACT_EMAIL}
+    params = openalex_params(params)
     resp = _get(client, f"{OPENALEX_API}{path}?{urlencode(params)}")
     if resp is None or resp.status_code != 200:
         return None
@@ -179,14 +180,6 @@ def _openalex_links(client, group: DisplayGroup, url: str) -> tuple[list[tuple[L
     for w in (citing or {}).get("results", []):
         if item := _to_live_item(w):
             links.append((item, "cites"))
-    related_ids = [r.rsplit("/", 1)[-1] for r in (work.get("related_works") or [])[:MAX_RELATED]]
-    if related_ids:
-        related = _openalex_get(client, "", {
-            "filter": "openalex_id:" + "|".join(related_ids), "select": WORK_FIELDS,
-        })
-        for w in (related or {}).get("results", []):
-            if item := _to_live_item(w):
-                links.append((item, "related"))
     return links, _citation_growth(work)
 
 
@@ -209,9 +202,58 @@ def _filter_links_by_meaning(encoder, groups, links, threshold: float):
     return [(kept[gi], growth) for gi, (_, growth) in enumerate(links)]
 
 
+MAX_ASSESSMENTS = 3
+ASSESSMENT_DB_LIMIT = 1000
+
+
+def _analyst_pool(session: Session, reports: list[SignalCandidate], queries: list[str]) -> list[SignalCandidate]:
+    by_key: dict[str, SignalCandidate] = {}
+    for c in reports:
+        by_key.setdefault(publication_key(c.title), c)
+    for q in queries:
+        for c in find_candidates(session, q, limit=ASSESSMENT_DB_LIMIT, date_from=date(2015, 1, 1)):
+            if c.sources and c.sources[0] in ANALYST_SOURCE_KEYS:
+                by_key.setdefault(publication_key(c.title), c)
+    return [c for c in by_key.values() if c.title and c.summary]
+
+
+def _analyst_assessments(
+    encoder, groups: list[DisplayGroup], pool: list[SignalCandidate], query: str,
+    signal_threshold: float, taken: set[str],
+) -> list[list[tuple[int, str]]]:
+    """Отчёты, близкие к сигналу (assessment); если таких нет — по теме запроса (assessment_topic)."""
+    pool = [c for c in pool if publication_key(c.title) not in taken]
+    if not pool:
+        return [[] for _ in groups]
+    pool_vecs = np.asarray(list(encoder.embed([_text(c) for c in pool], batch_size=32)))
+    rep_vecs = np.asarray(list(encoder.embed([_text(g.representative) for g in groups])))
+    passage_vecs = np.asarray(list(encoder.embed(
+        [f"passage: {c.title}. {' '.join((c.summary or '').split()[:TEXT_WORDS])}" for c in pool], batch_size=32,
+    )))
+    query_vec = np.asarray(next(iter(encoder.embed([f"query: {query}"]))))
+    by_query = passage_vecs @ query_vec
+    topic = [
+        (pool[i].feed_item_ids[0], "assessment_topic")
+        for i in np.argsort(-by_query)[:MAX_ASSESSMENTS] if by_query[i] >= RELEVANCE_THRESHOLD
+    ]
+
+    sims = pool_vecs @ rep_vecs.T
+    result = []
+    for gi in range(len(groups)):
+        order = np.argsort(-sims[:, gi])
+        own = [
+            (pool[i].feed_item_ids[0], "assessment")
+            for i in order[:MAX_ASSESSMENTS] if sims[i, gi] >= signal_threshold
+        ]
+        result.append(own or topic)
+    log.info("оценки аналитиков: пул %d отчётов, по теме запроса %d, сигналов со своими отчётами %d",
+             len(pool), len(topic), sum(1 for r in result if r and r[0][1] == "assessment"))
+    return result
+
+
 def corroborate(
     session: Session, encoder, groups: list[DisplayGroup], pool: list[SignalCandidate],
-    primary_urls: list[str],
+    primary_urls: list[str], *, reports: list[SignalCandidate] = (), queries: list[str] = (),
 ) -> list[Corroboration]:
     if not groups:
         return []
@@ -226,9 +268,19 @@ def corroborate(
                 result[gi].sources.extend(similar)
         except Exception as exc:
             log.error("подтверждения (близкие работы) упали: %s", exc)
+        try:
+            analyst_pool = _analyst_pool(session, list(reports), list(queries))
+            assessments = _analyst_assessments(
+                encoder, groups, analyst_pool, queries[0] if queries else "",
+                topic_median or SIMILAR_MIN, taken,
+            )
+            for gi, items in enumerate(assessments):
+                result[gi].sources.extend(items)
+        except Exception as exc:
+            log.error("оценки аналитиков упали: %s", exc)
 
     try:
-        with _client() as client, ThreadPoolExecutor(max_workers=6) as executor:
+        with _client() as client, ThreadPoolExecutor(max_workers=3) as executor:
             links = list(executor.map(lambda a: _openalex_links(client, *a), zip(groups, primary_urls)))
     except Exception as exc:
         log.error("подтверждения (OpenAlex) упали: %s", exc)

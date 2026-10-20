@@ -114,3 +114,24 @@ export interface SignalSourcesResponse {
   title: string;
   sources: SignalSourceDetail[];
 }
+
+export interface ReportsAssessmentField {
+  value: string;
+  basis: string | null;
+}
+
+export interface ReportsSummary {
+  status: "ready" | "pending" | "none";
+  stage?: ReportsAssessmentField;
+  first_applications?: ReportsAssessmentField;
+  mass_adoption?: ReportsAssessmentField;
+  model?: string;
+}
+
+export interface AnalystsResponse {
+  signal_id: number;
+  title: string;
+  scope: "signal" | "topic" | "none";
+  reports: SignalSourceDetail[];
+  summary: ReportsSummary;
+}

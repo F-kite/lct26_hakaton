@@ -100,8 +100,21 @@ def clean_text(text: str | None) -> str | None:
 _EMPTY_ITEM_RE = re.compile(r"^(не )?указан\w* в (тексте|источнике)\.?$", re.IGNORECASE)
 
 
+def _as_text(item) -> str:
+    """Запасная qwen иногда возвращает объект вместо предложения — берём из него текст."""
+    if isinstance(item, dict):
+        values = [v for v in item.values() if isinstance(v, str) and len(v.split()) > 2]
+        return max(values, key=len) if values else ""
+    if isinstance(item, str) and item.strip().startswith("{"):
+        try:
+            return _as_text(json.loads(item.replace("«", '"').replace("»", '"')))
+        except ValueError:
+            return ""
+    return item if isinstance(item, str) else ""
+
+
 def clean_manifestations(items: list | None) -> list[str]:
-    cleaned = [clean_item(m) for m in items or [] if isinstance(m, str)]
+    cleaned = [clean_item(_as_text(m)) for m in items or []]
     return [m for m in cleaned if m and not _EMPTY_ITEM_RE.match(m) and NOT_SPECIFIED not in m.lower()]
 
 
@@ -133,6 +146,10 @@ def _gigachat_ready() -> bool:
     from . import gigachat
 
     return gigachat.is_available()
+
+
+def gigachat_ready() -> bool:
+    return ENRICHMENT_PROVIDER == "gigachat" and _gigachat_ready()
 
 
 def enrichment_available() -> bool:
@@ -287,6 +304,104 @@ def summarize_source_ru(client: httpx.Client, title: str, text: str) -> tuple[st
         if summary:
             return summary, OLLAMA_MODEL
     return None
+
+
+def _llm_json(client: httpx.Client, system: str, user: str, schema: dict, check_key: str) -> tuple[dict, str] | None:
+    """(ответ, модель): GigaChat, при недоступности — qwen. check_key — поле, которое должно быть на русском."""
+    if _gigachat_ready():
+        from . import gigachat
+
+        try:
+            parsed = gigachat.chat_json(system, user, schema, model=ENRICHMENT_MODEL)
+            if _CYRILLIC_RE.search(json.dumps(parsed.get(check_key), ensure_ascii=False)):
+                return parsed, ENRICHMENT_MODEL
+        except Exception as exc:
+            log.error("gigachat (%s): %s", check_key, exc)
+            gigachat.mark_down(str(exc)[:80])
+    if ollama_available():
+        parsed = _call_ollama_json(client, system, user, schema)
+        if parsed:
+            return parsed, OLLAMA_MODEL
+    return None
+
+
+_ASSESSMENT_PROMPT = (
+    "Ты помогаешь аналитикам банка. По тексту аналитического отчёта кратко (1–2 предложения) "
+    "на русском языке изложи, как авторы оценивают технологию: её зрелость, перспективы, риски "
+    "или применение. Только по тексту, без собственных знаний. Если оценки в тексте нет — "
+    "кратко перескажи, о чём отчёт. Не используй шаблонные подстановки вида {{...}}."
+)
+_ASSESSMENT_SCHEMA = {
+    "type": "object",
+    "properties": {"оценка": {"type": "string"}},
+    "required": ["оценка"],
+}
+
+
+def assess_report_ru(client: httpx.Client, title: str, text: str) -> tuple[str, str] | None:
+    result = _llm_json(
+        client, _ASSESSMENT_PROMPT, f"Заголовок: {title}\n\nТекст: {text[:4000]}", _ASSESSMENT_SCHEMA, "оценка",
+    )
+    if result is None:
+        return None
+    text_ru = clean_item(clean_text((result[0].get("оценка") or "").strip()) or "")
+    return (text_ru, result[1]) if text_ru else None
+
+
+STAGE_VALUES = ["Исследования", "Ранняя стадия", "Пилотные внедрения", "Рост", "Зрелость", "Нет данных"]
+FIRST_USE_VALUES = ["Есть пилотные кейсы", "Есть внедрения", "Не подтверждено"]
+MASS_ADOPTION_VALUES = ["Подтверждено", "Не подтверждено"]
+
+_REPORTS_SUMMARY_PROMPT = (
+    "Ты помогаешь аналитикам банка. По фрагментам аналитических отчётов составь сводную оценку "
+    "технологии: стадия развития, первые применения, массовое внедрение. Выбирай значение строго "
+    "из допустимых и в основании одним предложением на русском укажи, на что опираешься в "
+    "отчётах. Только по текстам отчётов, без собственных знаний; если данных нет — выбирай "
+    "«Нет данных» или «Не подтверждено»."
+)
+
+
+def _assessment_field(values: list[str]) -> dict:
+    return {
+        "type": "object",
+        "properties": {"значение": {"type": "string", "enum": values}, "основание": {"type": "string"}},
+        "required": ["значение", "основание"],
+    }
+
+
+_REPORTS_SUMMARY_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "стадия": _assessment_field(STAGE_VALUES),
+        "первые_применения": _assessment_field(FIRST_USE_VALUES),
+        "массовое_внедрение": _assessment_field(MASS_ADOPTION_VALUES),
+    },
+    "required": ["стадия", "первые_применения", "массовое_внедрение"],
+}
+
+
+def summarize_reports_ru(
+    client: httpx.Client, technology: str, reports: list[tuple[str, str]],
+) -> tuple[dict, str] | None:
+    """Сводная оценка по отчётам: {stage, first_applications, mass_adoption: {value, basis}}."""
+    parts = [f"Технология: {technology}", ""]
+    for i, (title, text) in enumerate(reports, 1):
+        parts.append(f"Отчёт {i}: {title}\n{text[:1500]}\n")
+    result = _llm_json(client, _REPORTS_SUMMARY_PROMPT, "\n".join(parts), _REPORTS_SUMMARY_SCHEMA, "стадия")
+    if result is None:
+        return None
+    parsed, model = result
+    allowed = {
+        "stage": ("стадия", STAGE_VALUES, "Нет данных"),
+        "first_applications": ("первые_применения", FIRST_USE_VALUES, "Не подтверждено"),
+        "mass_adoption": ("массовое_внедрение", MASS_ADOPTION_VALUES, "Не подтверждено"),
+    }
+    summary = {}
+    for key, (ru_key, values, fallback) in allowed.items():
+        field = parsed.get(ru_key) or {}
+        value = field.get("значение") if field.get("значение") in values else fallback
+        summary[key] = {"value": value, "basis": clean_item(clean_text((field.get("основание") or "").strip()) or "") or None}
+    return summary, model
 
 
 _TRANSLATE_SYSTEM_PROMPT = (

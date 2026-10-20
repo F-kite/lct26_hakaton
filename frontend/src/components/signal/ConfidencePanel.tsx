@@ -30,7 +30,7 @@ export default function ConfidencePanel({ signal }: { signal: Signal }) {
   const barWidth = byRelevance ? relevance * 100 : pct;
 
   return (
-    <div className="sticky top-6 rounded-xl p-5 glass-card glass-border-8 [--glass-fill:var(--color-primary-50)]">
+    <div className="rounded-xl p-5 glass-card glass-border-8 [--glass-fill:var(--color-primary-50)]">
       <div className="text-sm text-neutral-700">{label}</div>
       <div className="mt-4 font-display text-4xl font-bold text-neutral-950">{value}</div>
       {byRelevance && (

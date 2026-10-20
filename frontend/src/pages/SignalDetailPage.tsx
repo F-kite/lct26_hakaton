@@ -1,11 +1,13 @@
 import { useRef } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
-import { useCreateSearch, useSignalDetail } from "../api/queries";
+import { useCreateSearch, useSignalAnalysts, useSignalDetail } from "../api/queries";
 import Breadcrumbs from "../components/Breadcrumbs";
 import HistoryButton from "../components/history/HistoryButton";
 import Logo from "../components/Logo";
+import AnalystReportsBlock from "../components/signal/AnalystReportsBlock";
 import CaseExamples from "../components/signal/CaseExamples";
+import ReportsSummaryCard from "../components/signal/ReportsSummaryCard";
 import ConfidencePanel from "../components/signal/ConfidencePanel";
 import ReasonTags from "../components/signal/ReasonTags";
 import SourcesList from "../components/signal/SourcesList";
@@ -17,6 +19,7 @@ export default function SignalDetailPage() {
   const createSearch = useCreateSearch();
   const searchInputRef = useRef<HTMLInputElement>(null);
   const { data: signal, isLoading } = useSignalDetail(signalId ? Number(signalId) : null);
+  const { data: analysts } = useSignalAnalysts(signal ? signal.id : null);
 
   const handleNewSearch = (query: string) => {
     createSearch.mutate({ query }, {
@@ -60,7 +63,7 @@ export default function SignalDetailPage() {
           <h1 className="text-5xl font-bold text-link">{signal.title}</h1>
         </div>
 
-        <div className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-[1fr_320px]">
+        <div className="mt-6 grid grid-cols-1 items-start gap-4 lg:grid-cols-[1fr_320px]">
           <div className="space-y-4">
             <div className="rounded-xl p-5 glass-card glass-border-8">
               <div className="flex items-center justify-between">
@@ -92,15 +95,30 @@ export default function SignalDetailPage() {
               manifestations={signal.manifestations ?? null}
               primarySource={primarySource}
             />
-            <SourcesList
-              sources={signal.sources}
-              allSourcesHref={`/results/${queryId}/signals/${signal.id}/sources`}
-            />
           </div>
 
-          <div>
+          <div className="lg:sticky lg:top-6">
             <ConfidencePanel signal={signal} />
           </div>
+        </div>
+
+        {analysts && analysts.scope !== "none" && (
+          <div className="mt-8 grid grid-cols-1 items-start gap-4 lg:grid-cols-[1fr_320px]">
+            <AnalystReportsBlock
+              data={analysts}
+              allHref={`/results/${queryId}/signals/${signal.id}/analysts`}
+            />
+            <div className="lg:sticky lg:top-6 lg:mt-12">
+              <ReportsSummaryCard summary={analysts.summary} />
+            </div>
+          </div>
+        )}
+
+        <div className="mt-8 grid grid-cols-1 gap-4 lg:grid-cols-[1fr_320px]">
+          <SourcesList
+            sources={signal.sources}
+            allSourcesHref={`/results/${queryId}/signals/${signal.id}/sources`}
+          />
         </div>
       </main>
     </div>

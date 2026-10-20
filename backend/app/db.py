@@ -129,6 +129,7 @@ class Signal(Base):
     case_example: Mapped[str | None] = mapped_column(Text)
     weak_criteria: Mapped[list | None] = mapped_column(JSONB)
     manifestations: Mapped[list | None] = mapped_column(JSONB)
+    analyst_summary: Mapped[dict | None] = mapped_column(JSONB)
     stage: Mapped[str | None] = mapped_column(String(64))
     mention_trend: Mapped[str | None] = mapped_column(Text)
     score: Mapped[float] = mapped_column(Float)
@@ -183,6 +184,17 @@ class SourceSummary(Base):
     feed_item_id: Mapped[int] = mapped_column(ForeignKey("feed_items.id"), primary_key=True)
     model: Mapped[str] = mapped_column(String(64))
     summary: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class AnalystAssessment(Base):
+    """Оценка технологии из аналитического отчёта — краткий пересказ на русском."""
+
+    __tablename__ = "analyst_assessments"
+
+    feed_item_id: Mapped[int] = mapped_column(ForeignKey("feed_items.id"), primary_key=True)
+    model: Mapped[str] = mapped_column(String(64))
+    assessment: Mapped[str] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 

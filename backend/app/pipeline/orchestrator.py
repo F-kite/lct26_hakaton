@@ -32,7 +32,7 @@ from .classifier import (
 from .display_grouping import DisplayGroup, group_for_display
 from .enrichment import translate_query_to_english, translation_available
 from .enrichment_service import enrich_cached
-from .live_sources import _detect_language, fetch_all_live, persist_live_items
+from .live_sources import _detect_language, fetch_all_live, fetch_analyst_reports, persist_live_items
 
 log = logging.getLogger(__name__)
 
@@ -263,6 +263,9 @@ def run_search(
             search_query_text, q.date_from, q.date_to, original_query=q.query_text,
         )
         live_feed_items = persist_live_items(session, live_items)
+        report_items = persist_live_items(
+            session, fetch_analyst_reports(search_query_text, q.query_text, q.date_from, q.date_to),
+        )
         for fi in live_feed_items:
             if fi.id not in seen_feed_item_ids:
                 candidates.append(_feed_item_to_candidate(fi))
@@ -309,6 +312,8 @@ def run_search(
         ]
         corroborations = corroborate(
             session, getattr(classifier, "encoder", None), top_groups, candidates, primary_urls,
+            reports=[_feed_item_to_candidate(fi) for fi in report_items],
+            queries=list(dict.fromkeys([q.query_text, search_query_text])),
         )
 
         with httpx.Client() as llm_client:

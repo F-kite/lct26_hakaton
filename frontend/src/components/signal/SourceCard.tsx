@@ -1,5 +1,5 @@
 import type { SignalSource, SignalSourceDetail } from "../../api/types";
-import { relationLabel, sourceTypeLabel } from "../../lib/sourceLabels";
+import { isAssessment, relationLabel, sourceTypeLabel } from "../../lib/sourceLabels";
 
 export function trustLabel(trustLevel: string): string {
   return trustLevel === "high" ? "Доверенный" : "Пониженная доверенность";
@@ -90,7 +90,9 @@ export default function SourceCard({ source }: Props) {
           </div>
           {aiSummary && (
             <div>
-              <div className="text-sm text-neutral-500">Резюме сгенерировано ИИ</div>
+              <div className="text-sm text-neutral-500">
+                {isAssessment(source.relation) ? "Оценка сгенерирована ИИ" : "Резюме сгенерировано ИИ"}
+              </div>
               <div className="mt-1 text-sm text-neutral-950">{detail?.summary_model}</div>
             </div>
           )}

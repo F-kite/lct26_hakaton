@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { Link } from "react-router-dom";
 
 import type { SignalSource } from "../../api/types";
+import { isAssessment } from "../../lib/sourceLabels";
 import SourceCard from "./SourceCard";
 
 const PREVIEW_COUNT = 3;
@@ -20,7 +21,7 @@ interface SourcesListProps {
 }
 
 export default function SourcesList({ sources, allSourcesHref }: SourcesListProps) {
-  const sorted = useMemo(() => sortSources(sources), [sources]);
+  const sorted = useMemo(() => sortSources(sources.filter((s) => !isAssessment(s.relation))), [sources]);
 
   return (
     <div>

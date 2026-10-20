@@ -112,3 +112,11 @@ class SignalSourcesResponse(BaseModel):
     signal_id: int
     title: str
     sources: list[SignalSourceDetailOut]
+
+
+class AnalystsResponse(BaseModel):
+    signal_id: int
+    title: str
+    scope: str  # signal — отчёты по самой технологии; topic — по теме запроса; none — не найдены
+    reports: list[SignalSourceDetailOut]
+    summary: dict

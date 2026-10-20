@@ -39,3 +39,8 @@ docs/AUDIT.md
 
 # энкодер E5 модели v2 — качается скриптом backend/app/models/v2/download_encoder.py
 backend/app/models/v2/encoder/
+
+# веса E5 и reranker из комплекта аналитика (по 118 МБ, лимит хостинга 100 МБ);
+# энкодер = intfloat/multilingual-e5-small, бэкенд качает его сам (backend/app/models/v2/download_encoder.py)
+Модель_и_методология/v2/encoder/onnx/
+Модель_и_методология/v2/reranker/onnx/

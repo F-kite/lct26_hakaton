@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 
 from ..config import ENRICHMENT_MODEL
 from ..db import SessionLocal, Signal, SignalEnrichment
-from .enrichment import EnrichmentResult, enrich_signal, enrichment_available
+from .enrichment import EnrichmentResult, enrich_signal, enrichment_available, gigachat_ready
 
 log = logging.getLogger(__name__)
 
@@ -83,7 +83,10 @@ def enrich_cached(
 
 
 def _is_enriched(signal: Signal) -> bool:
-    return bool(signal.explanation.get("enrichment_model")) and signal.weak_criteria is not None
+    model = signal.explanation.get("enrichment_model")
+    if not model or signal.weak_criteria is None:
+        return False
+    return model == ENRICHMENT_MODEL or not gigachat_ready()
 
 
 def ensure_enriched(session: Session, signal: Signal) -> None:

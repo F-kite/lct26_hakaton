@@ -21,6 +21,7 @@ _EXTRA_COLUMNS = [
     ("signals", "manifestations", "JSONB"),
     ("signal_enrichments", "weak_criteria", "JSONB"),
     ("signal_enrichments", "manifestations", "JSONB"),
+    ("signals", "analyst_summary", "JSONB"),
 ]
 
 

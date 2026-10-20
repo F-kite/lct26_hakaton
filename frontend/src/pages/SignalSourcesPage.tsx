@@ -1,7 +1,8 @@
 import { useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
-import { useCreateSearch, useSignalSources } from "../api/queries";
+import { useCreateSearch, useSignalAnalysts, useSignalSources } from "../api/queries";
+import ReportsSummaryCard from "../components/signal/ReportsSummaryCard";
 import Breadcrumbs from "../components/Breadcrumbs";
 import HistoryButton from "../components/history/HistoryButton";
 import Logo from "../components/Logo";
@@ -23,7 +24,7 @@ function Chip({ active, onClick, children }: ChipProps) {
     <button
       type="button"
       onClick={onClick}
-      className={`rounded-md px-2.5 py-1 text-sm whitespace-nowrap hover:cursor-pointer ${
+      className={`rounded-md px-2 py-1 text-xs whitespace-nowrap hover:cursor-pointer ${
         active ? "bg-primary text-white" : "bg-neutral-50 text-neutral-600 hover:bg-neutral-200"
       }`}
     >
@@ -32,12 +33,24 @@ function Chip({ active, onClick, children }: ChipProps) {
   );
 }
 
-export default function SignalSourcesPage() {
+interface Props {
+  kind?: "sources" | "analysts";
+}
+
+export default function SignalSourcesPage({ kind = "sources" }: Props) {
   const { queryId, signalId } = useParams<{ queryId: string; signalId: string }>();
   const navigate = useNavigate();
   const createSearch = useCreateSearch();
   const searchInputRef = useRef<HTMLInputElement>(null);
-  const { data, isLoading, isError } = useSignalSources(signalId ? Number(signalId) : null);
+  const analystsMode = kind === "analysts";
+  const id = signalId ? Number(signalId) : null;
+  const sourcesQuery = useSignalSources(analystsMode ? null : id);
+  const analystsQuery = useSignalAnalysts(analystsMode ? id : null);
+  const { isLoading, isError } = analystsMode ? analystsQuery : sourcesQuery;
+  const data = analystsMode
+    ? analystsQuery.data && { title: analystsQuery.data.title, sources: analystsQuery.data.reports }
+    : sourcesQuery.data;
+  const pageTitle = analystsMode ? "Оценки аналитиков" : "Источники и подтверждения";
   const [lang, setLang] = useState<LangFilter>("all");
   const [trust, setTrust] = useState<TrustFilter>("all");
 
@@ -81,11 +94,11 @@ export default function SignalSourcesPage() {
           items={[
             { label: "Слабые сигналы", to: `/results/${queryId}` },
             { label: data?.title ?? "Сигнал", to: `/results/${queryId}/signals/${signalId}` },
-            { label: "Источники и подтверждения" },
+            { label: pageTitle },
           ]}
         />
         <h1 className="mt-4 text-4xl font-bold text-neutral-950">
-          Источники и подтверждения{" "}
+          {pageTitle}{" "}
           {data && <span className="text-2xl text-primary">{sources.length}</span>}
         </h1>
 
@@ -95,15 +108,25 @@ export default function SignalSourcesPage() {
         {data && (
           <div className="mt-6 grid grid-cols-1 items-start gap-6 lg:grid-cols-[1fr_360px]">
             <div className="space-y-5">
+              {analystsMode && analystsQuery.data?.scope === "topic" && (
+                <p className="rounded-lg bg-neutral-50 p-3 text-sm text-neutral-600">
+                  Отчётов именно об этой технологии не найдено — показаны оценки аналитиков по теме запроса.
+                </p>
+              )}
+              {analystsMode && analystsQuery.data?.scope === "none" && (
+                <p className="text-neutral-500">Аналитические отчёты по технологии не найдены.</p>
+              )}
               {filtered.map((source) => (
                 <SourceCard key={source.feed_item_id} source={source} />
               ))}
-              {filtered.length === 0 && (
+              {filtered.length === 0 && sources.length > 0 && (
                 <p className="text-neutral-500">Нет источников под выбранные фильтры.</p>
               )}
             </div>
 
-            <aside className="order-first rounded-2xl p-5 glass-card glass-border-8 lg:sticky lg:top-6 lg:order-none">
+            <div className="order-first space-y-4 lg:sticky lg:top-6 lg:order-none">
+            {analystsMode && <ReportsSummaryCard summary={analystsQuery.data?.summary} />}
+            <aside className="rounded-2xl p-5 glass-card glass-border-8">
               <div className="flex items-center justify-between">
                 <h2 className="text-lg font-bold text-neutral-950">Фильтры</h2>
                 <button
@@ -118,22 +141,23 @@ export default function SignalSourcesPage() {
                 </button>
               </div>
               <div className="mt-5 flex items-center justify-between gap-4">
-                <span className="text-sm text-neutral-950">Язык</span>
-                <div className="flex flex-wrap justify-end gap-1.5">
+                <span className="shrink-0 text-sm text-neutral-950">Язык</span>
+                <div className="flex flex-wrap justify-end gap-1">
                   <Chip active={lang === "all"} onClick={() => setLang("all")}>Все {sources.length}</Chip>
                   <Chip active={lang === "RU"} onClick={() => setLang("RU")}>RU {counts.ru}</Chip>
                   <Chip active={lang === "EN"} onClick={() => setLang("EN")}>EN {counts.en}</Chip>
                 </div>
               </div>
               <div className="mt-4 flex items-center justify-between gap-4">
-                <span className="text-sm text-neutral-950">Статус</span>
-                <div className="flex flex-wrap justify-end gap-1.5">
+                <span className="shrink-0 text-sm text-neutral-950">Статус</span>
+                <div className="flex flex-wrap justify-end gap-1">
                   <Chip active={trust === "all"} onClick={() => setTrust("all")}>Все {sources.length}</Chip>
                   <Chip active={trust === "high"} onClick={() => setTrust("high")}>Высокая {counts.high}</Chip>
                   <Chip active={trust === "low"} onClick={() => setTrust("low")}>Пониженная {counts.low}</Chip>
                 </div>
               </div>
             </aside>
+            </div>
           </div>
         )}
       </main>

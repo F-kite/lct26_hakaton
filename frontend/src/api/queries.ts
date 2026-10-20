@@ -9,6 +9,7 @@ import type {
   SearchSummaryResponse,
   Signal,
   SignalSourcesResponse,
+  AnalystsResponse,
 } from "./types";
 
 const POLL_INTERVAL_MS = 3000;
@@ -88,5 +89,19 @@ export function useSignalSources(signalId: number | null) {
     enabled: signalId !== null,
     refetchInterval: (query) =>
       query.state.data?.sources.some((s) => s.summary_status === "pending") ? 3000 : false,
+  });
+}
+
+export function useSignalAnalysts(signalId: number | null) {
+  return useQuery({
+    queryKey: ["signalAnalysts", signalId],
+    queryFn: () => api.get<AnalystsResponse>(`/insight/${signalId}/analysts`),
+    enabled: signalId !== null,
+    refetchInterval: (query) => {
+      const data = query.state.data;
+      if (!data) return false;
+      const pending = data.summary.status === "pending" || data.reports.some((r) => r.summary_status === "pending");
+      return pending ? 3000 : false;
+    },
   });
 }

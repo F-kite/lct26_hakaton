@@ -16,9 +16,6 @@ logging.basicConfig(
     datefmt="%H:%M:%S",
 )
 
-# LOG_DIR — папка на хосте (volume): логи переживают пересоздание контейнера.
-# Новый файл каждые сутки, хранится 30 последних. Access-лог uvicorn не пишем —
-# фронтенд опрашивает статус каждые 2–3 с, это только шум.
 _log_dir = os.getenv("LOG_DIR")
 if _log_dir:
     os.makedirs(_log_dir, exist_ok=True)
@@ -28,8 +25,6 @@ if _log_dir:
     _file_handler.setFormatter(logging.Formatter(
         "%(asctime)s %(levelname)-7s %(name)s | %(message)s", datefmt="%Y-%m-%d %H:%M:%S",
     ))
-    # у логгера uvicorn свой обработчик и propagate=False — подключаем отдельно
-    # (uvicorn.error передаёт записи в uvicorn, отдельно его не трогаем)
     for _name in ("", "uvicorn"):
         logging.getLogger(_name).addHandler(_file_handler)
 

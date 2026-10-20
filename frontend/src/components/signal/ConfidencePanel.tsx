@@ -9,9 +9,12 @@ export default function ConfidencePanel({ signal }: { signal: Signal }) {
   const predicted = signal.explanation.predicted_class;
   const isWeakSignalClass = predicted === "слабый сигнал";
 
+  const reason = signal.explanation.reason;
   const description =
     signal.status === "excluded"
-      ? isWeakSignalClass
+      ? reason
+        ? reason
+        : isWeakSignalClass
         ? `Модель распознала признаки слабого сигнала, но с уверенностью всего ${pct}% — ниже порога, необходимого для попадания в выдачу.`
         : `Модель отнесла технологию к классу «${predicted ?? "не слабым сигналом"}» и не считает её слабым сигналом.`
       : pct >= 80

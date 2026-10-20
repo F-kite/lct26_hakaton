@@ -1,12 +1,9 @@
 import { useSyncExternalStore } from "react";
 
-// История поисков без авторизации — только в этом браузере (localStorage).
-// Хранятся id запросов: результаты лежат в БД и открываются по /results/:id.
-
 export interface HistoryEntry {
   id: number;
   query: string;
-  createdAt: string; // ISO
+  createdAt: string;
 }
 
 export type HistorySnapshot =
@@ -25,7 +22,6 @@ function isEntry(value: unknown): value is HistoryEntry {
   );
 }
 
-// useSyncExternalStore требует стабильный снимок — пересобираем только при смене строки
 const ERROR_SNAPSHOT: HistorySnapshot = { ok: false, entries: [] };
 const EMPTY_SNAPSHOT: HistorySnapshot = { ok: true, entries: [] };
 let cachedRaw: string | null | undefined;
@@ -57,7 +53,6 @@ function write(entries: HistoryEntry[]) {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(entries.slice(0, MAX_ENTRIES)));
   } catch {
-    // приватный режим / переполнение — история просто не сохранится
   }
   window.dispatchEvent(new Event(CHANGE_EVENT));
 }
@@ -71,7 +66,6 @@ export function removeHistoryEntry(id: number) {
   write(readSnapshot().entries.filter((e) => e.id !== id));
 }
 
-/** Повторная попытка после ошибки чтения: сбрасываем кэш, чтобы перечитать хранилище. */
 export function retryHistory() {
   cachedRaw = undefined;
   window.dispatchEvent(new Event(CHANGE_EVENT));
@@ -79,7 +73,7 @@ export function retryHistory() {
 
 function subscribe(onChange: () => void) {
   window.addEventListener(CHANGE_EVENT, onChange);
-  window.addEventListener("storage", onChange); // изменения из других вкладок
+  window.addEventListener("storage", onChange);
   return () => {
     window.removeEventListener(CHANGE_EVENT, onChange);
     window.removeEventListener("storage", onChange);
@@ -90,7 +84,6 @@ export function useSearchHistory(): HistorySnapshot {
   return useSyncExternalStore(subscribe, readSnapshot);
 }
 
-/** Начало любого слова в тексте совпадает с введённым (регистр не важен). */
 export function findMatch(text: string, input: string): number {
   const needle = input.trim().toLowerCase();
   if (!needle) return -1;

@@ -21,6 +21,7 @@ def signal_to_out(signal: Signal) -> SignalOut:
             language=ss.feed_item.language,
             published_at=ss.feed_item.published_at,
             is_primary=ss.is_primary,
+            relation=ss.relation,
         )
         for ss in signal.sources
     ]

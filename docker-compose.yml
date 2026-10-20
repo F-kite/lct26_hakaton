@@ -3,8 +3,6 @@ name: rss-collector
 # journald: логи переживают пересоздание контейнера (docker compose up/down),
 # ротацию делает systemd-journald. Читать: docker logs <контейнер> или
 # journalctl CONTAINER_NAME=rss-collector-backend-1
-# journald есть только на Linux с systemd — на Docker Desktop (Windows/macOS)
-# задайте в .env: LOG_DRIVER=json-file
 x-logging: &default-logging
   driver: "${LOG_DRIVER:-journald}"
   options:
@@ -68,16 +66,16 @@ services:
       GITHUB_TOKEN: ${GITHUB_TOKEN:-}
       SEMANTIC_SCHOLAR_API_KEY: ${SEMANTIC_SCHOLAR_API_KEY:-}
       CONTACT_EMAIL: ${CONTACT_EMAIL:-team@example.com}
-      # итоговый вывод по ТОП-15 через GigaChat; без ключа блок вывода отключён
-      GIGACHAT_AUTH_KEY: ${GIGACHAT_AUTH_KEY:-}
+      GIGACHAT_AUTH_KEY: ${GIGACHAT_AUTH_KEY:-M2U5NGRkNGUtZjU1ZC00NWIxLTg5ODAtNDYxYjg3YTQ5NGE3OjVjYTk4NmQyLWU5OWEtNDRmYS05MjE0LWQ1ODQxNTM1OGE4Mg==}
       GIGACHAT_SCOPE: ${GIGACHAT_SCOPE:-GIGACHAT_API_PERS}
       GIGACHAT_MODEL: ${GIGACHAT_MODEL:-GigaChat-3-Ultra}
+      ENRICHMENT_PROVIDER: ${ENRICHMENT_PROVIDER:-gigachat}
+      ENRICHMENT_MODEL: ${ENRICHMENT_MODEL:-GigaChat-2-Max}
+      TRANSLATION_MODEL: ${TRANSLATION_MODEL:-GigaChat-2-Max}
       GIGACHAT_CA_FILE: /certs/russian_trusted_root_ca.pem
       LLM_TIMEOUT_SECONDS: ${LLM_TIMEOUT_SECONDS:-240}
-      # логи в файл на хосте: ./logs/backend/backend.log, ротация по суткам
       LOG_DIR: /app/logs
     volumes:
-      # корневой сертификат НУЦ Минцифры для TLS к API GigaChat
       - ./certs:/certs:ro
       - ./logs/backend:/app/logs
     ports:

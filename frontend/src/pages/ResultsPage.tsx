@@ -56,7 +56,6 @@ export default function ResultsPage() {
   };
 
   if (!status && isError) {
-    // например, запрос из истории браузера, которого уже нет в БД
     return (
       <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-neutral-100 text-center">
         <p className="text-neutral-700">Не удалось загрузить результаты этого запроса.</p>
@@ -129,7 +128,7 @@ export default function ResultsPage() {
           <Logo />
           <div className="w-full sm:max-w-200 sm:flex-1">
             <SearchInput
-              key={status.query_id} // переход на другой запрос из истории — новый текст в поле
+              key={status.query_id}
               size="sm"
               defaultValue={status.query_text}
               inputRef={searchInputRef}
@@ -168,6 +167,7 @@ export default function ResultsPage() {
             label="Отобрано слабых сигналов"
             value={included.length}
             hint="Лучшие по результатам ранжирования"
+            note={`Из них с уверенностью модели выше 75%: ${included.filter((s) => s.score > 0.75).length}`}
           />
         </div>
 

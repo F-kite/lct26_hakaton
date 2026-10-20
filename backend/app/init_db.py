@@ -16,6 +16,7 @@ _EXTRA_COLUMNS = [
     ("search_queries", "date_from", "DATE"),
     ("search_queries", "date_to", "DATE"),
     ("signal_sources", "is_primary", "BOOLEAN DEFAULT FALSE"),
+    ("signal_sources", "relation", "VARCHAR(16)"),
 ]
 
 

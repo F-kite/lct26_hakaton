@@ -2,17 +2,27 @@
 преимущество, кейс-пример. Вызывается только для кандидатов в топ-N — не
 тратить инференс на все кандидаты.
 
-Локальная Qwen2.5 через Ollama.
+Описания и перевод запроса — GigaChat 2 Max (при наличии ключа), при его
+недоступности автоматически — запасная локальная Qwen2.5 через Ollama.
+Какая модель дала ответ, сохраняется вместе с ним (ТЗ: раскрытие модели).
 """
 
 from __future__ import annotations
 
 import json
 import logging
+import re
+import time
 
 import httpx
 
-from ..config import OLLAMA_BASE_URL, OLLAMA_MODEL
+from ..config import (
+    ENRICHMENT_MODEL,
+    ENRICHMENT_PROVIDER,
+    OLLAMA_BASE_URL,
+    OLLAMA_MODEL,
+    TRANSLATION_MODEL,
+)
 
 log = logging.getLogger(__name__)
 
@@ -27,7 +37,9 @@ _SYSTEM_PROMPT = (
     "повторяй его другими словами), потенциальное преимущество (какую пользу даёт), "
     "кейс-пример (конкретный факт применения из текста — компания, продукт, пилот). "
     "Если в тексте нет данных для какого-то пункта — напиши \"не указано в источнике\" "
-    "для этого пункта, не придумывай."
+    "для этого пункта, не придумывай. Кейс-пример — только конкретный факт применения "
+    "(компания, продукт, пилот, патент, внедрение); общие возможности технологии кейсом "
+    "не являются. Отвечай строго на русском языке, даже если текст статьи на английском."
 )
 
 _JSON_SCHEMA = {
@@ -49,15 +61,60 @@ class EnrichmentResult:
         problem: str | None,
         potential_advantage: str | None,
         case_example: str | None,
+        model: str | None = None,
     ):
         self.description = description
         self.problem = problem
         self.potential_advantage = potential_advantage
         self.case_example = case_example
+        self.model = model
+
+
+def ollama_available() -> bool:
+    return bool(OLLAMA_BASE_URL and OLLAMA_MODEL)
+
+
+def _gigachat_ready() -> bool:
+    from . import gigachat
+
+    return gigachat.is_available()
 
 
 def enrichment_available() -> bool:
-    return bool(OLLAMA_BASE_URL and OLLAMA_MODEL)
+    return (ENRICHMENT_PROVIDER == "gigachat" and _gigachat_ready()) or ollama_available()
+
+
+def translation_available() -> bool:
+    return _gigachat_ready() or ollama_available()
+
+
+_CYRILLIC_RE = re.compile(r"[а-яё]", re.IGNORECASE)
+GIGACHAT_ATTEMPTS = 3
+
+
+def _call_gigachat_json(user_content: str) -> dict | None:
+    from . import gigachat
+
+    content = user_content
+    for attempt in range(GIGACHAT_ATTEMPTS):
+        try:
+            parsed = gigachat.chat_json(_SYSTEM_PROMPT, content, _JSON_SCHEMA, model=ENRICHMENT_MODEL)
+        except gigachat.GigaChatError as exc:
+            if exc.retryable and attempt < GIGACHAT_ATTEMPTS - 1:
+                time.sleep(2 * 2**attempt)
+                continue
+            log.error("gigachat (описание): %s", exc)
+            gigachat.mark_down(str(exc)[:80])
+            return None
+        except Exception as exc:
+            log.error("gigachat (описание): %s", exc)
+            gigachat.mark_down(type(exc).__name__)
+            return None
+        if _CYRILLIC_RE.search(parsed.get("описание") or ""):
+            return parsed
+        log.warning("gigachat (описание): ответ не на русском, повтор")
+        content = "Ответ дай строго на русском языке.\n\n" + user_content
+    return None
 
 
 def _call_ollama_json(
@@ -73,7 +130,7 @@ def _call_ollama_json(
     перевод, иначе разная формулировка одного запроса между прогонами
     меняет результаты живых API и топ выдачи.
     """
-    if not enrichment_available():
+    if not ollama_available():
         log.info("ollama: OLLAMA_BASE_URL/OLLAMA_MODEL не заданы — пропуск")
         return None
 
@@ -104,12 +161,17 @@ def _call_ollama_json(
 
 
 def enrich_signal(client: httpx.Client, title: str, source_text: str) -> EnrichmentResult | None:
-    """Вернуть None, если Ollama недоступна или ответ не разобрать —
+    """Вернуть None, если модель недоступна или ответ не разобрать —
     обогащение необязательный шаг, его отсутствие не должно ронять
     сохранение самого сигнала (см. orchestrator.py)."""
-    parsed = _call_ollama_json(
-        client, _SYSTEM_PROMPT, f"Заголовок: {title}\n\nТекст: {source_text[:6000]}", _JSON_SCHEMA,
-    )
+    user_content = f"Заголовок: {title}\n\nТекст: {source_text[:6000]}"
+    parsed, model = None, None
+    if ENRICHMENT_PROVIDER == "gigachat" and _gigachat_ready():
+        parsed, model = _call_gigachat_json(user_content), ENRICHMENT_MODEL
+    if parsed is None and ollama_available():
+        if ENRICHMENT_PROVIDER == "gigachat":
+            log.warning("описание: GigaChat недоступен — запасная модель %s", OLLAMA_MODEL)
+        parsed, model = _call_ollama_json(client, _SYSTEM_PROMPT, user_content, _JSON_SCHEMA), OLLAMA_MODEL
     if parsed is None:
         return None
 
@@ -118,6 +180,7 @@ def enrich_signal(client: httpx.Client, title: str, source_text: str) -> Enrichm
         problem=parsed.get("проблема"),
         potential_advantage=parsed.get("преимущество"),
         case_example=parsed.get("кейс_пример"),
+        model=model,
     )
 
 _TRANSLATE_SYSTEM_PROMPT = (
@@ -135,9 +198,21 @@ _TRANSLATE_JSON_SCHEMA = {
 
 
 def translate_query_to_english(client: httpx.Client, query: str) -> str | None:
-    """None при недоступности Ollama/сбое разбора — вызывающий код должен
-    откатиться на оригинальный query, не блокировать поиск."""
-    parsed = _call_ollama_json(client, _TRANSLATE_SYSTEM_PROMPT, query, _TRANSLATE_JSON_SCHEMA, temperature=0)
+    parsed = None
+    if _gigachat_ready():
+        from . import gigachat
+
+        try:
+            parsed = gigachat.chat_json(
+                _TRANSLATE_SYSTEM_PROMPT, query, _TRANSLATE_JSON_SCHEMA,
+                temperature=0.01, model=TRANSLATION_MODEL,
+            )
+        except Exception as exc:
+            log.error("gigachat (перевод): %s", exc)
+            gigachat.mark_down(str(exc)[:80])
+    if parsed is None and ollama_available():
+        log.info("перевод запроса: запасная модель %s", OLLAMA_MODEL)
+        parsed = _call_ollama_json(client, _TRANSLATE_SYSTEM_PROMPT, query, _TRANSLATE_JSON_SCHEMA, temperature=0)
     if parsed is None:
         return None
     translation = (parsed.get("translation") or "").strip()

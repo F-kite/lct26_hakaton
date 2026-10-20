@@ -4,7 +4,6 @@ import { useState } from "react";
 import HistoryModal from "./HistoryModal";
 
 interface Props {
-  /** «Начать поиск» в пустой истории — закрыть модалку и поставить фокус в поиск. */
   onStartSearch: () => void;
 }
 

@@ -11,6 +11,7 @@ export interface SignalSource {
   language: string;
   published_at: string | null;
   is_primary: boolean;
+  relation?: string | null;
 }
 
 export interface SignalExplanation {
@@ -19,6 +20,9 @@ export interface SignalExplanation {
   rationale?: string;
   key_predictors?: string[];
   enrichment_model?: string;
+  relevance?: number;
+  reason?: string;
+  passage_hint?: string;
 }
 
 export type SignalStatus = "included" | "excluded";

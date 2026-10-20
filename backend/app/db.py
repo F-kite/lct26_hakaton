@@ -148,6 +148,7 @@ class SignalSource(Base):
     signal_id: Mapped[int] = mapped_column(ForeignKey("signals.id"), primary_key=True)
     feed_item_id: Mapped[int] = mapped_column(ForeignKey("feed_items.id"), primary_key=True)
     is_primary: Mapped[bool] = mapped_column(Boolean, default=False)
+    relation: Mapped[str | None] = mapped_column(String(16))
 
     signal: Mapped[Signal] = relationship(back_populates="sources")
     feed_item: Mapped[FeedItem] = relationship()
@@ -171,15 +172,13 @@ class SignalEnrichment(Base):
 
 
 class SearchSummary(Base):
-    """Итоговый вывод GigaChat по ТОП-15 запроса. Пишется только готовый
-    результат или ошибка — очередь и статус «в работе» живут в памяти."""
 
     __tablename__ = "search_summaries"
 
     query_id: Mapped[int] = mapped_column(ForeignKey("search_queries.id"), primary_key=True)
-    status: Mapped[str] = mapped_column(String(16))  # done|failed
+    status: Mapped[str] = mapped_column(String(16))
     overview: Mapped[str | None] = mapped_column(Text)
-    key_signals: Mapped[list] = mapped_column(JSONB, default=list)  # [{signal_id, reason}]
+    key_signals: Mapped[list] = mapped_column(JSONB, default=list)
     model: Mapped[str | None] = mapped_column(String(64))
     error: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

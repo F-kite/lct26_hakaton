@@ -5,9 +5,10 @@ interface Props {
   label: string;
   value: number;
   hint: string;
+  note?: string;
 }
 
-export default function StatCard({ icon: Icon, label, value, hint }: Props) {
+export default function StatCard({ icon: Icon, label, value, hint, note }: Props) {
   return (
     <div className="glass-card glass-border-8 flex-1 rounded-xl p-5">
       <div className="flex items-center justify-between">
@@ -20,6 +21,7 @@ export default function StatCard({ icon: Icon, label, value, hint }: Props) {
         {value.toLocaleString("ru-RU")}
       </div>
       <div className="mt-2 text-[13px] text-black-alpha">{hint}</div>
+      {note && <div className="mt-1 text-[13px] text-neutral-900">{note}</div>}
     </div>
   );
 }

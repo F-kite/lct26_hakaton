@@ -170,8 +170,6 @@ export default function HistoryModal({ onClose, onStartSearch }: Props) {
         <div className="glass-frame rounded-xl p-2">
           <div className="rounded-xl bg-neutral-0">{body}</div>
         </div>
-        {/* кнопка — не внутри glass-frame: элемент с backdrop-filter не даёт
-            потомкам размывать то, что лежит за его пределами */}
         <button
           type="button"
           onClick={onClose}

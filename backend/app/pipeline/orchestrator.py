@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from datetime import datetime, timezone
 
 import httpx
@@ -11,7 +12,8 @@ from sqlalchemy.orm import Session
 
 from ..config import (
     MODEL_PATH,
-    OLLAMA_MODEL,
+    MODEL_VERSION,
+    ENRICHMENT_MODEL,
     SEARCH_CANDIDATE_LIMIT,
     SEARCH_EXCLUDED_LIMIT,
     SEARCH_TOP_N,
@@ -19,6 +21,7 @@ from ..config import (
 )
 from ..db import FeedItem, SearchQuery, Signal, SignalSource
 from .candidates import find_candidates
+from .corroboration import Corroboration, corroborate
 from .classifier import (
     LABEL_MATURE,
     ScoringResult,
@@ -26,14 +29,22 @@ from .classifier import (
     SignalClassifier,
     TrainedModelClassifier,
 )
-from .display_grouping import group_for_display
-from .enrichment import enrichment_available, translate_query_to_english
+from .display_grouping import DisplayGroup, group_for_display
+from .enrichment import translate_query_to_english, translation_available
 from .enrichment_service import enrich_cached
 from .live_sources import _detect_language, fetch_all_live, persist_live_items
 
 log = logging.getLogger(__name__)
 
-DEFAULT_CLASSIFIER: SignalClassifier = TrainedModelClassifier(MODEL_PATH)
+def _build_classifier() -> SignalClassifier:
+    if MODEL_VERSION == "v2":
+        from .classifier_v2 import E5SignalClassifier
+
+        return E5SignalClassifier()
+    return TrainedModelClassifier(MODEL_PATH)
+
+
+DEFAULT_CLASSIFIER: SignalClassifier = _build_classifier()
 
 # In-memory отметка отменённых поисков — run_search() выполняется в том же
 # процессе backend'а (FastAPI BackgroundTasks), поэтому БД/новая колонка
@@ -72,6 +83,71 @@ def _is_mainstream(result) -> bool:
     return result.explanation.get("predicted_class") == LABEL_MATURE
 
 
+GRANT_SOURCES = {"nsf", "ukri", "cordis"}
+SCIENTIFIC_SOURCES = {"arxiv", "semantic_scholar", "openalex", "crossref", "europepmc"}
+FRESH_DAYS = 365
+
+
+def _signal_predictors(group: DisplayGroup, corroboration: Corroboration | None = None) -> list[str]:
+    indicators = set(group.result.explanation.get("indicators") or [])
+    sources = {key for member in group.members for key in member.sources}
+    dates = [m.published_at for m in group.members if m.published_at]
+    now = datetime.now(timezone.utc)
+
+    tags = []
+    if sources & GRANT_SOURCES:
+        tags.append("Получен грант")
+    if "early" in indicators:
+        tags.append("Первые пилоты")
+    if "funding" in indicators:
+        tags.append("Привлечены инвестиции")
+    if "research" in indicators:
+        tags.append("Новые исследования")
+    if sources & SCIENTIFIC_SOURCES:
+        tags.append("Научная публикация")
+    if corroboration is not None and corroboration.citation_growth:
+        tags.append("Рост цитирований")
+    if "github" in sources:
+        tags.append("Код в открытом доступе")
+    if dates and (now - max(_aware(d) for d in dates)).days <= FRESH_DAYS:
+        tags.append("Свежая публикация")
+    return tags
+
+
+def _publication_key(candidate: SignalCandidate) -> str:
+    return re.sub(r"\W+", " ", (candidate.title or "").lower()).strip()
+
+
+def _unique_publication_ids(group: DisplayGroup) -> list[int]:
+    seen = {_publication_key(group.representative)}
+    ids = list(group.representative.feed_item_ids)
+    for member in group.members:
+        key = _publication_key(member)
+        if key not in seen:
+            seen.add(key)
+            ids.extend(member.feed_item_ids)
+    return ids
+
+
+def _dedupe_publications(pairs: list[tuple[SignalCandidate, ScoringResult]]):
+    seen: set[str] = set()
+    unique = []
+    for candidate, result in pairs:
+        key = _publication_key(candidate)
+        if key not in seen:
+            seen.add(key)
+            unique.append((candidate, result))
+    return unique
+
+
+def _aware(d: datetime) -> datetime:
+    return d if d.tzinfo else d.replace(tzinfo=timezone.utc)
+
+
+def _rank_key(result: ScoringResult) -> tuple[float, float]:
+    return (result.explanation.get("relevance", 0.0), result.confidence)
+
+
 def _was_scored(result: ScoringResult) -> bool:
     """True, если кандидат реально дошёл до модели (не отфильтрован на
     входе classifier.py по языку/длине текста — см. _clean_model_input).
@@ -91,6 +167,7 @@ def _persist_signal(
     classifier: SignalClassifier,
     llm_client: httpx.Client,
     allow_llm: bool = True,
+    extra_sources: list[tuple[int, str]] = (),
 ) -> None:
     # Исключённые при поиске обогащаются только из кэша (бесплатно);
     # недостающее досчитывается лениво при открытии карточки.
@@ -101,7 +178,7 @@ def _persist_signal(
 
     explanation = dict(result.explanation)
     if enrichment is not None:
-        explanation["enrichment_model"] = OLLAMA_MODEL
+        explanation["enrichment_model"] = enrichment.model or ENRICHMENT_MODEL
 
     signal = Signal(
         query_id=q.id,
@@ -120,11 +197,19 @@ def _persist_signal(
     session.add(signal)
     session.flush()
     primary_feed_item_id = candidate.feed_item_ids[0]
-    for feed_item_id in feed_item_ids:
+    linked = [
+        (fid, "primary" if fid == primary_feed_item_id else "similar") for fid in feed_item_ids
+    ] + list(extra_sources)
+    seen: set[int] = set()
+    for feed_item_id, relation in linked:
+        if feed_item_id in seen:
+            continue
+        seen.add(feed_item_id)
         session.add(SignalSource(
             signal_id=signal.id,
             feed_item_id=feed_item_id,
             is_primary=(feed_item_id == primary_feed_item_id),
+            relation=relation,
         ))
 
 
@@ -149,7 +234,7 @@ def run_search(
         _check_cancelled(query_id)
 
         search_query_text = q.query_text
-        if _detect_language(q.query_text) != "EN" and enrichment_available():
+        if _detect_language(q.query_text) != "EN" and translation_available():
             with httpx.Client() as translate_client:
                 translated = translate_query_to_english(translate_client, q.query_text)
             if translated:
@@ -177,34 +262,52 @@ def run_search(
         q.phase = "scoring"
         session.commit()
 
-        scored = [(c, classifier.score(c)) for c in candidates]
+        if hasattr(classifier, "score_batch"):
+            results = classifier.score_batch(q.query_text, candidates)
+        else:
+            results = [classifier.score(c) for c in candidates]
+        scored = list(zip(candidates, results))
         q.signals_above_75 = sum(1 for _, r in scored if r.confidence >= 0.75)
 
-        passed = [(c, r) for c, r in scored if r.confidence >= SIGNAL_SCORE_THRESHOLD]
-        passed.sort(key=lambda pair: pair[1].confidence, reverse=True)
-
-
-        rejected = [
+        passed = [
             (c, r) for c, r in scored
-            if _was_scored(r) and (r.confidence < SIGNAL_SCORE_THRESHOLD or _is_mainstream(r))
+            if r.is_weak_signal and r.confidence >= SIGNAL_SCORE_THRESHOLD
         ]
-        rejected.sort(key=lambda pair: pair[1].confidence, reverse=True)
-        rejected = rejected[:SEARCH_EXCLUDED_LIMIT]
+        passed.sort(key=lambda pair: _rank_key(pair[1]), reverse=True)
+
+        passed_ids = {id(c) for c, _ in passed}
+        rejected = [(c, r) for c, r in scored if _was_scored(r) and id(c) not in passed_ids]
+        rejected.sort(
+            key=lambda pair: (pair[1].explanation.get("enough_text", True), *_rank_key(pair[1])),
+            reverse=True,
+        )
+        rejected = _dedupe_publications(rejected)[:SEARCH_EXCLUDED_LIMIT]
 
         q.phase = "ranking"
         session.commit()
 
         groups = group_for_display(classifier, passed)
-        groups.sort(key=lambda g: g.result.confidence, reverse=True)
+        groups.sort(key=lambda g: _rank_key(g.result), reverse=True)
         top_groups = groups[:SEARCH_TOP_N]
 
+        _check_cancelled(query_id)
+        primary_urls = [
+            (session.get(FeedItem, g.representative.feed_item_ids[0]).url or "") for g in top_groups
+        ]
+        corroborations = corroborate(
+            session, getattr(classifier, "encoder", None), top_groups, candidates, primary_urls,
+        )
+
         with httpx.Client() as llm_client:
-            for group in top_groups:
+            for group, corroboration in zip(top_groups, corroborations):
                 _check_cancelled(query_id)
+                if "indicators" in group.result.explanation:
+                    group.result.explanation["key_predictors"] = _signal_predictors(group, corroboration)
                 _persist_signal(
                     session, q, group.representative, group.result,
-                    feed_item_ids=group.feed_item_ids, status="included",
+                    feed_item_ids=_unique_publication_ids(group), status="included",
                     classifier=classifier, llm_client=llm_client,
+                    extra_sources=corroboration.sources,
                 )
             for candidate, result in rejected:
                 _check_cancelled(query_id)

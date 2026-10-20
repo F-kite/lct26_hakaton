@@ -1,7 +1,4 @@
-"""Минимальный клиент GigaChat: OAuth-токен (живёт 30 минут) + chat/completions
-с ответом строго по JSON-схеме. Параллельность здесь не ограничивается —
-этим занимается очередь в summary_service.
-"""
+"""Минимальный клиент GigaChat: OAuth-токен (живёт 30 минут) + chat/completions."""
 
 from __future__ import annotations
 
@@ -39,9 +36,21 @@ def is_configured() -> bool:
     return bool(GIGACHAT_AUTH_KEY)
 
 
+DOWN_COOLDOWN_S = 120
+_down_until = 0.0
+
+
+def is_available() -> bool:
+    return is_configured() and time.time() >= _down_until
+
+
+def mark_down(reason: str) -> None:
+    global _down_until
+    _down_until = time.time() + DOWN_COOLDOWN_S
+    log.warning("GigaChat недоступен (%s) — %d с используем запасную модель", reason, DOWN_COOLDOWN_S)
+
+
 def _verify() -> str | bool:
-    # без сертификата Минцифры TLS-проверка не пройдёт — лучше явная ошибка,
-    # чем молча отключённая проверка
     if GIGACHAT_CA_FILE and os.path.exists(GIGACHAT_CA_FILE):
         return GIGACHAT_CA_FILE
     log.warning("GigaChat: сертификат %s не найден, используем системные", GIGACHAT_CA_FILE)
@@ -49,8 +58,9 @@ def _verify() -> str | bool:
 
 
 _token: str | None = None
-_token_expires_at = 0.0  # unix-время в секундах
+_token_expires_at = 0.0
 _token_lock = threading.Lock()
+_call_lock = threading.Lock()
 
 
 def _get_token(client: httpx.Client) -> str:
@@ -72,19 +82,21 @@ def _get_token(client: httpx.Client) -> str:
             raise GigaChatError(f"OAuth {resp.status_code}: {resp.text[:200]}", retryable=resp.status_code >= 500)
         data = resp.json()
         _token = data["access_token"]
-        _token_expires_at = data["expires_at"] / 1000  # API отдаёт миллисекунды
+        _token_expires_at = data["expires_at"] / 1000
         return _token
 
 
-def chat_json(system: str, user: str, schema: dict, *, temperature: float = 0.2) -> dict:
-    """Один запрос к модели; ответ — dict по схеме. 429/5xx — retryable."""
-    with httpx.Client(verify=_verify(), timeout=LLM_TIMEOUT_SECONDS) as client:
+def chat_json(
+    system: str, user: str, schema: dict, *, temperature: float = 0.2, model: str | None = None,
+) -> dict:
+    timeout = httpx.Timeout(LLM_TIMEOUT_SECONDS, connect=10.0)
+    with _call_lock, httpx.Client(verify=_verify(), timeout=timeout) as client:
         token = _get_token(client)
         resp = client.post(
             CHAT_URL,
             headers={"Authorization": f"Bearer {token}"},
             json={
-                "model": GIGACHAT_MODEL,
+                "model": model or GIGACHAT_MODEL,
                 "messages": [
                     {"role": "system", "content": system},
                     {"role": "user", "content": user},
@@ -96,12 +108,14 @@ def chat_json(system: str, user: str, schema: dict, *, temperature: float = 0.2)
     if resp.status_code != 200:
         if resp.status_code == 401:
             global _token
-            _token = None  # токен отозван раньше срока — следующая попытка возьмёт новый
+            _token = None
         raise GigaChatError(
             f"chat {resp.status_code}: {resp.text[:200]}",
             retryable=resp.status_code in (401, 429) or resp.status_code >= 500,
         )
-    content = resp.json()["choices"][0]["message"]["content"]
+    data = resp.json()
+    log.info("GigaChat: модель %s, токенов %s", data.get("model"), (data.get("usage") or {}).get("total_tokens"))
+    content = data["choices"][0]["message"]["content"]
     try:
         return json.loads(content)
     except json.JSONDecodeError as exc:

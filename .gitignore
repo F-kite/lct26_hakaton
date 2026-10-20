@@ -33,3 +33,6 @@ desktop.ini
 
 # логи сервисов (volume)
 logs/
+
+# внутренний аудит — не публикуем
+docs/AUDIT.md

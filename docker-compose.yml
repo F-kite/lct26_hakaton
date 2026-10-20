@@ -68,8 +68,10 @@ services:
       GITHUB_TOKEN: ${GITHUB_TOKEN:-}
       SEMANTIC_SCHOLAR_API_KEY: ${SEMANTIC_SCHOLAR_API_KEY:-}
       CONTACT_EMAIL: ${CONTACT_EMAIL:-team@example.com}
-      # итоговый вывод по ТОП-15 через GigaChat; без ключа блок вывода отключён
-      GIGACHAT_AUTH_KEY: ${GIGACHAT_AUTH_KEY:-}
+      # итоговый вывод по ТОП-15 через GigaChat. Ключ оставлен по умолчанию по просьбе
+      # организаторов (чтобы у проверяющих всё запустилось); после хакатона будет отозван.
+      # Свой ключ можно задать в .env: GIGACHAT_AUTH_KEY=...
+      GIGACHAT_AUTH_KEY: ${GIGACHAT_AUTH_KEY:-M2U5NGRkNGUtZjU1ZC00NWIxLTg5ODAtNDYxYjg3YTQ5NGE3OjVjYTk4NmQyLWU5OWEtNDRmYS05MjE0LWQ1ODQxNTM1OGE4Mg==}
       GIGACHAT_SCOPE: ${GIGACHAT_SCOPE:-GIGACHAT_API_PERS}
       GIGACHAT_MODEL: ${GIGACHAT_MODEL:-GigaChat-3-Ultra}
       GIGACHAT_CA_FILE: /certs/russian_trusted_root_ca.pem

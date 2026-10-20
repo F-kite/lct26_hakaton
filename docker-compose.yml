@@ -1,10 +1,10 @@
 name: rss-collector
 
-# journald: логи переживают пересоздание контейнера (docker compose up/down),
-# ротацию делает systemd-journald. Читать: docker logs <контейнер> или
+# json-file работает везде (Windows/macOS/Linux). На сервере с systemd в .env
+# задаётся LOG_DRIVER=journald — тогда логи переживают пересоздание контейнеров:
 # journalctl CONTAINER_NAME=rss-collector-backend-1
 x-logging: &default-logging
-  driver: "${LOG_DRIVER:-journald}"
+  driver: "${LOG_DRIVER:-json-file}"
   options:
     tag: "{{.Name}}"
 

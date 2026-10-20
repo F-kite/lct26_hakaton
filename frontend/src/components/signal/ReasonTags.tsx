@@ -1,4 +1,5 @@
 import type { Signal } from "../../api/types";
+import { displayTag, formatRelevance, formatThreshold, isBelowRelevance } from "../../lib/relevance";
 
 const CLASSES = ["слабый сигнал", "зрелая технология", "шум"];
 
@@ -23,7 +24,7 @@ export default function ReasonTags({ signal }: { signal: Signal }) {
       : `Модель отнесла технологию к классу «${predicted ?? "зрелая технология"}», а не к слабым сигналам.`;
 
   const probabilities = explanation.class_probabilities ?? {};
-  const relevancePct = explanation.relevance !== undefined ? Math.ceil(explanation.relevance * 100) : null;
+  const relevanceText = explanation.relevance !== undefined ? formatRelevance(explanation.relevance) : null;
 
   return (
     <div className="rounded-xl p-5 glass-card glass-border-8">
@@ -51,7 +52,7 @@ export default function ReasonTags({ signal }: { signal: Signal }) {
               key={tag}
               className="rounded-md bg-neutral-50 px-2.5 py-1 text-sm text-neutral-600"
             >
-              {tag}
+              {displayTag(tag, explanation)}
             </span>
           ))}
         </div>
@@ -81,12 +82,19 @@ export default function ReasonTags({ signal }: { signal: Signal }) {
               })}
             </ul>
           </div>
-          {relevancePct !== null && (
+          {relevanceText !== null && (
             <div>
               <div className="text-sm text-neutral-500">Соответствие запросу</div>
-              <div className="mt-2 font-display text-2xl font-bold text-neutral-950">{relevancePct}%</div>
+              <div
+                className={`mt-2 font-display text-2xl font-bold ${
+                  isBelowRelevance(explanation) ? "text-error" : "text-neutral-950"
+                }`}
+              >
+                {relevanceText}
+              </div>
               <p className="mt-1 text-xs text-neutral-500">
-                Смысловая близость запроса и текста публикации.
+                Смысловая близость запроса и текста публикации. Порог попадания в выдачу —{" "}
+                {formatThreshold(explanation)}.
               </p>
             </div>
           )}

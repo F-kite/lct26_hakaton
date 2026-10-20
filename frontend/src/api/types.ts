@@ -21,6 +21,7 @@ export interface SignalExplanation {
   key_predictors?: string[];
   enrichment_model?: string;
   relevance?: number;
+  relevance_threshold?: number;
   reason?: string;
   passage_hint?: string;
 }

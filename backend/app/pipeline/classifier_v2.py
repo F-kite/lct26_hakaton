@@ -125,7 +125,8 @@ class E5SignalClassifier:
 
             fired = s.indicators(f"{article['title']} {article['text']}")
             indicators = [name for name, value in zip(s.PATTERNS, fired) if value > 0]
-            relevance_tag = f"Релевантность {math.ceil(rel['relevance'] * 100)}%"
+            relevance_pct = f"{math.floor(rel['relevance'] * 1000) / 10:.1f}".replace(".", ",")
+            relevance_tag = f"Релевантность {relevance_pct}%"
             key_predictors = [] if accepted else [t for t in (tag, relevance_tag) if t]
 
             results.append(ScoringResult(
@@ -135,7 +136,8 @@ class E5SignalClassifier:
                 explanation={
                     "predicted_class": s.LABELS[label],
                     "class_probabilities": {s.LABELS[k]: round(v, 3) for k, v in scores.items()},
-                    "relevance": round(rel["relevance"], 3),
+                    "relevance": round(rel["relevance"], 4),
+                    "relevance_threshold": RELEVANCE_THRESHOLD,
                     "accepted": accepted,
                     "enough_text": enough_text,
                     "reason": reason,

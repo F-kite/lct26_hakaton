@@ -287,10 +287,10 @@ def _reconstruct_openalex_abstract(inverted_index: dict[str, list[int]] | None) 
 
 def fetch_openalex_live(
     client: httpx.Client, query: str, *, per_page: int = 25,
-    date_from: date | None = None, date_to: date | None = None,
+    date_from: date | None = None, date_to: date | None = None, language: str | None = None,
 ) -> list[LiveItem]:
     params = {"search": query, "per-page": str(per_page), "mailto": CONTACT_EMAIL}
-    filters = []
+    filters = [f"language:{language}"] if language else []
     if date_from:
         filters.append(f"from_publication_date:{date_from}")
     if date_to:
@@ -620,6 +620,56 @@ def fetch_cordis_live(
     return items
 
 
+def fetch_openalex_ru_live(
+    client: httpx.Client, query: str, *, date_from: date | None = None, date_to: date | None = None,
+) -> list[LiveItem]:
+    return fetch_openalex_live(client, query, date_from=date_from, date_to=date_to, language="ru")
+
+
+CYBERLENINKA_API = "https://cyberleninka.ru/api/search"
+
+
+def fetch_cyberleninka_live(
+    client: httpx.Client, query: str, *, limit: int = 20,
+    date_from: date | None = None, date_to: date | None = None,
+) -> list[LiveItem]:
+    try:
+        resp = client.post(CYBERLENINKA_API, json={"mode": "articles", "q": query, "size": limit, "from": 0})
+    except httpx.HTTPError as exc:
+        log.warning("cyberleninka: %s", exc)
+        return []
+    if resp.status_code != 200:
+        return []
+    try:
+        articles = resp.json().get("articles") or []
+    except ValueError:
+        log.error("cyberleninka: не удалось разобрать ответ как JSON")
+        return []
+
+    items = []
+    for a in articles:
+        title = re.sub(r"<[^>]+>", "", a.get("name") or "").strip()
+        link = a.get("link")
+        if not title or not link:
+            continue
+        published_at = None
+        if a.get("year"):
+            try:
+                published_at = datetime(int(a["year"]), 1, 1, tzinfo=timezone.utc)
+            except (TypeError, ValueError):
+                pass
+        items.append(LiveItem(
+            source_key="cyberleninka",
+            url=f"https://cyberleninka.ru{link}",
+            title=" ".join(title.split()),
+            published_at=published_at,
+            summary=" ".join(re.sub(r"<[^>]+>", "", a.get("annotation") or "").split()) or None,
+            author=", ".join(a.get("authors") or []) or None,
+            raw_categories=a.get("journal"),
+        ))
+    return items
+
+
 EUROPEPMC_API = "https://www.ebi.ac.uk/europepmc/webservices/rest/search"
 
 
@@ -708,6 +758,10 @@ LIVE_SOURCE_META: dict[str, dict[str, str]] = {
         name="Europe PMC", site_url="https://europepmc.org", source_type="academic_aggregator",
         trust_level="high", language="EN", topics="Все",
     ),
+    "cyberleninka": dict(
+        name="КиберЛенинка", site_url="https://cyberleninka.ru", source_type="academic_aggregator",
+        trust_level="medium", language="RU", topics="Все",
+    ),
     "cordis": dict(
         name="CORDIS (EU)", site_url="https://cordis.europa.eu", source_type="grant_database",
         trust_level="high", language="EN", topics="Все",
@@ -717,6 +771,7 @@ LIVE_SOURCE_META: dict[str, dict[str, str]] = {
 
 def fetch_all_live(
     query: str, date_from: date | None = None, date_to: date | None = None,
+    original_query: str | None = None,
 ) -> list[LiveItem]:
     """Опросить все живые источники параллельно — они независимы, и время
     фазы определяет самый медленный, а не сумма (retry на 429 у одного
@@ -737,6 +792,12 @@ def fetch_all_live(
         ("cordis", fetch_cordis_live),
         ("europepmc", fetch_europepmc_live),
     ]
+    ru_query = original_query if original_query and _CYRILLIC_RE.search(original_query) else None
+    if ru_query:
+        fetchers += [
+            ("openalex_ru", lambda c, _q, **kw: fetch_openalex_ru_live(c, ru_query, **kw)),
+            ("cyberleninka", lambda c, _q, **kw: fetch_cyberleninka_live(c, ru_query, **kw)),
+        ]
 
     with _client() as client:
 

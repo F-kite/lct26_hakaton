@@ -2,6 +2,7 @@ import ArrowRight from "@iconify-react/bi/arrow-right";
 import { useMemo, useState } from "react";
 
 import type { Signal } from "../../api/types";
+import { displayTag } from "../../lib/relevance";
 
 interface Props {
   signals: Signal[];
@@ -66,7 +67,7 @@ export default function SignalsTable({ signals, mode, onRowClick }: Props) {
                       key={tag}
                       className="rounded-md bg-neutral-50 px-2.5 py-1 text-xs text-neutral-600"
                     >
-                      {tag}
+                      {displayTag(tag, signal.explanation)}
                     </span>
                   ))}
                 </div>

@@ -19,6 +19,16 @@ CANDIDATE_LOOKBACK_DAYS = 365
 _WORD_RE = re.compile(r"[a-zа-я0-9]+", re.IGNORECASE)
 
 
+_CYRILLIC_RE = re.compile(r"[а-яё]")
+
+
+def _stem(word: str) -> str:
+    # русские падежи: «микрофлюидные» должно находить «микрофлюидных»
+    if _CYRILLIC_RE.search(word) and len(word) > 5:
+        return word[: max(5, len(word) - 2)]
+    return word
+
+
 def find_candidates(
     session: Session, query: str, *, limit: int = 200,
     date_from: date | None = None, date_to: date | None = None,
@@ -26,7 +36,7 @@ def find_candidates(
     """date_from/date_to — диапазон дат публикации включительно. Без date_from
     действует окно свежести CANDIDATE_LOOKBACK_DAYS, без date_to верхней
     границы нет."""
-    terms = [t for t in _WORD_RE.findall(query.lower()) if len(t) > 2]
+    terms = [_stem(t) for t in _WORD_RE.findall(query.lower()) if len(t) > 2]
     if not terms:
         return []
 

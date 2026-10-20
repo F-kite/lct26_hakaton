@@ -247,10 +247,21 @@ def run_search(
             session, search_query_text, limit=SEARCH_CANDIDATE_LIMIT,
             date_from=q.date_from, date_to=q.date_to,
         )
+        if search_query_text != q.query_text:
+            seen = {c.feed_item_ids[0] for c in db_candidates}
+            db_candidates += [
+                c for c in find_candidates(
+                    session, q.query_text, limit=SEARCH_CANDIDATE_LIMIT,
+                    date_from=q.date_from, date_to=q.date_to,
+                )
+                if c.feed_item_ids[0] not in seen
+            ]
         candidates = list(db_candidates)
         seen_feed_item_ids = {c.feed_item_ids[0] for c in candidates}
 
-        live_items = fetch_all_live(search_query_text, q.date_from, q.date_to)
+        live_items = fetch_all_live(
+            search_query_text, q.date_from, q.date_to, original_query=q.query_text,
+        )
         live_feed_items = persist_live_items(session, live_items)
         for fi in live_feed_items:
             if fi.id not in seen_feed_item_ids:

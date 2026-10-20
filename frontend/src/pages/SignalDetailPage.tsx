@@ -66,7 +66,7 @@ export default function SignalDetailPage() {
                 <h3 className=" text-neutral-950 [-webkit-text-stroke:0.4px_currentColor]">О технологии</h3>
                 {enriched && (
                   <span className="rounded-md bg-neutral-50 px-2.5 py-1 text-xs text-neutral-600">
-                    Резюме сгенерировано ИИ
+                    Резюме сгенерировано ИИ · {signal.explanation.enrichment_model}
                   </span>
                 )}
               </div>

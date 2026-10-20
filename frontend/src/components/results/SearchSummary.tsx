@@ -30,7 +30,6 @@ export default function SearchSummary({ queryId, onOpenSignal }: Props) {
   const { data, isError } = useSearchSummary(queryId, true);
   const retry = useRetrySummary(queryId);
 
-  // без GigaChat или без сигналов блок не показываем
   if (isError || !data || data.status === "disabled" || data.status === "empty") return null;
 
   let body: React.ReactNode;

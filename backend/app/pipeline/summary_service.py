@@ -1,14 +1,9 @@
-"""Итоговый вывод по ТОП-15 поиска через GigaChat.
-
-У аккаунта физлица — один поток запросов к API, поэтому все задачи идут
-через одну FIFO-очередь и один поток-исполнитель (uvicorn работает одним
-процессом, так что очереди в памяти достаточно). Готовый вывод сохраняется
-в search_summaries — повторные открытия страницы GigaChat не вызывают.
-"""
+"""Итоговый вывод по ТОП-15 поиска через GigaChat."""
 
 from __future__ import annotations
 
 import logging
+import re
 import threading
 import time
 from collections import deque
@@ -25,7 +20,7 @@ log = logging.getLogger(__name__)
 MAX_ATTEMPTS = 4
 BACKOFF_BASE_S = 3.0
 KEY_SIGNALS_MAX = 3
-DESCRIPTION_CHARS = 600
+DESCRIPTION_CHARS = 1500
 
 QueueState = tuple[Literal["queued", "running"], int] | None
 
@@ -36,7 +31,6 @@ _worker: threading.Thread | None = None
 
 
 def enqueue(query_id: int) -> None:
-    """Поставить в очередь, если запрос ещё не стоит там и не выполняется."""
     global _worker
     with _cond:
         if query_id == _running or query_id in _queue:
@@ -49,7 +43,6 @@ def enqueue(query_id: int) -> None:
 
 
 def queue_state(query_id: int) -> QueueState:
-    """('running', 0) / ('queued', сколько задач впереди, включая выполняемую) / None."""
     with _cond:
         if query_id == _running:
             return ("running", 0)
@@ -107,12 +100,13 @@ SCHEMA = {
 }
 
 
+_TAG_RE = re.compile(r"<[^>]+>")
+
+
 def _signal_text(signal: Signal) -> str:
-    text = signal.description
-    if not text or text.lower().startswith("не указано"):
-        primary = next((s for s in signal.sources if s.is_primary), signal.sources[0] if signal.sources else None)
-        text = primary.feed_item.summary if primary else ""
-    text = " ".join((text or "").split())
+    primary = next((s for s in signal.sources if s.is_primary), signal.sources[0] if signal.sources else None)
+    text = (primary.feed_item.summary if primary else None) or signal.description or ""
+    text = " ".join(_TAG_RE.sub(" ", text).split())
     return text[:DESCRIPTION_CHARS]
 
 
@@ -175,7 +169,7 @@ def _process(query_id: int) -> None:
             log.error("summary %s: %s", query_id, exc)
             _store(query_id, status="failed", error=str(exc)[:500])
             return
-        except Exception as exc:  # сеть, таймаут
+        except Exception as exc:
             if attempt < MAX_ATTEMPTS - 1:
                 time.sleep(BACKOFF_BASE_S * 2**attempt)
                 continue
@@ -183,7 +177,6 @@ def _process(query_id: int) -> None:
             _store(query_id, status="failed", error=str(exc)[:500])
             return
 
-    # модель может сослаться на несуществующий id — такие отбрасываем
     key_signals, seen = [], set()
     for item in data.get("key_signals") or []:
         sid = item.get("signal_id")

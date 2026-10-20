@@ -14,7 +14,7 @@ import httpx
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
-from ..config import OLLAMA_MODEL
+from ..config import ENRICHMENT_MODEL
 from ..db import SessionLocal, Signal, SignalEnrichment
 from .enrichment import EnrichmentResult, enrich_signal, enrichment_available
 
@@ -28,19 +28,20 @@ _lazy_lock = threading.Lock()
 
 def _get_cached(session: Session, feed_item_id: int) -> EnrichmentResult | None:
     row = session.get(SignalEnrichment, feed_item_id)
-    if row is None or row.model != OLLAMA_MODEL:
+    if row is None or row.model != ENRICHMENT_MODEL:
         return None
     return EnrichmentResult(
         description=row.description,
         problem=row.problem,
         potential_advantage=row.potential_advantage,
         case_example=row.case_example,
+        model=row.model,
     )
 
 
 def _store(feed_item_id: int, result: EnrichmentResult) -> None:
     values = dict(
-        model=OLLAMA_MODEL,
+        model=result.model or ENRICHMENT_MODEL,
         description=result.description,
         problem=result.problem,
         potential_advantage=result.potential_advantage,
@@ -106,6 +107,6 @@ def ensure_enriched(session: Session, signal: Signal) -> None:
         signal.potential_advantage = result.potential_advantage
         signal.case_example = result.case_example
         explanation = dict(signal.explanation)
-        explanation["enrichment_model"] = OLLAMA_MODEL
+        explanation["enrichment_model"] = result.model or ENRICHMENT_MODEL
         signal.explanation = explanation
         session.commit()

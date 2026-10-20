@@ -35,7 +35,6 @@ export default function SearchInput({
 }: SearchInputProps) {
   const [value, setValue] = useState(defaultValue);
   const [focused, setFocused] = useState(false);
-  // список прячется после выбора варианта / Esc и снова открывается при вводе
   const [dismissed, setDismissed] = useState(false);
   const [active, setActive] = useState(-1);
   const history = useSearchHistory();

@@ -29,14 +29,10 @@ SEMANTIC_SCHOLAR_API_KEY = os.getenv("SEMANTIC_SCHOLAR_API_KEY")
 GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
 
 # --- обученная модель ---
-# v2 — E5 (смысл запроса и статьи) + классификатор стадии; v1 — TF-IDF + LogReg
 MODEL_VERSION = os.getenv("MODEL_VERSION", "v2")
 MODEL_PATH = os.getenv("MODEL_PATH", "app/models/signal_classifier.pkl")
 MODEL_V2_PATH = os.getenv("MODEL_V2_PATH", "app/models/v2/model.pkl")
 E5_MODEL_DIR = os.getenv("E5_MODEL_DIR", "app/models/v2/encoder")
-# порог смысловой близости запроса и статьи (E5). Аналитик подобрал 0.8 на
-# validation; снижен до 0.79 — у RU-запроса к EN-тексту близость ниже, и 0.8
-# отсекал явно подходящие статьи
 RELEVANCE_THRESHOLD = float(os.getenv("RELEVANCE_THRESHOLD", "0.79"))
 
 # --- LLM-обогащение сигналов (описание/преимущество/кейс-пример, ТЗ) ---
@@ -45,11 +41,14 @@ RELEVANCE_THRESHOLD = float(os.getenv("RELEVANCE_THRESHOLD", "0.79"))
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen2.5:3b")
 
-# --- GigaChat: итоговый вывод по ТОП-15 поиска ---
-# без ключа вывод отключён, остальной сервис работает как раньше
 GIGACHAT_AUTH_KEY = os.getenv("GIGACHAT_AUTH_KEY", "").strip()
 GIGACHAT_SCOPE = os.getenv("GIGACHAT_SCOPE", "GIGACHAT_API_PERS")
 GIGACHAT_MODEL = os.getenv("GIGACHAT_MODEL", "GigaChat-3-Ultra")
-# корневой сертификат НУЦ Минцифры — API GigaChat работает на нём
 GIGACHAT_CA_FILE = os.getenv("GIGACHAT_CA_FILE", "../certs/russian_trusted_root_ca.pem")
 LLM_TIMEOUT_SECONDS = float(os.getenv("LLM_TIMEOUT_SECONDS", "240"))
+
+ENRICHMENT_PROVIDER = os.getenv("ENRICHMENT_PROVIDER", "gigachat" if GIGACHAT_AUTH_KEY else "ollama")
+ENRICHMENT_MODEL = os.getenv(
+    "ENRICHMENT_MODEL", "GigaChat-2-Max" if ENRICHMENT_PROVIDER == "gigachat" else OLLAMA_MODEL,
+)
+TRANSLATION_MODEL = os.getenv("TRANSLATION_MODEL", "GigaChat-2-Max")

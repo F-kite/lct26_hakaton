@@ -44,7 +44,6 @@ export function useSearchStatus(queryId: number | null, enabled: boolean) {
 export function useCancelSearch() {
   return useMutation({
     mutationFn: (queryId: number) => api.post<void>(`/search/${queryId}/cancel`, {}),
-    // у остановленного поиска нет результатов — в истории ему делать нечего
     onMutate: (queryId) => removeHistoryEntry(queryId),
   });
 }

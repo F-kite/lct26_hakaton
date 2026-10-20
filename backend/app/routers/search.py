@@ -73,8 +73,6 @@ def _summary_response(q: SearchQuery, session: Session) -> SearchSummaryResponse
     if not gigachat.is_configured():
         return SearchSummaryResponse(status="disabled", top_signals=top)
 
-    # сначала очередь, потом БД: исполнитель пишет результат до того, как
-    # снимает «running», так что готовый вывод не будет поставлен повторно
     state = summary_service.queue_state(q.id)
     if state is not None:
         status, ahead = state
@@ -99,8 +97,6 @@ def _summary_response(q: SearchQuery, session: Session) -> SearchSummaryResponse
 
 @router.get("/search/{query_id}/summary", response_model=SearchSummaryResponse)
 def get_search_summary(query_id: int, session: Session = Depends(get_session)) -> SearchSummaryResponse:
-    """Вывод по ТОП-15. Первое обращение ставит генерацию в очередь —
-    фронтенд опрашивает, пока статус не станет done/failed."""
     q = session.get(SearchQuery, query_id)
     if q is None:
         raise HTTPException(status_code=404, detail="запрос не найден")

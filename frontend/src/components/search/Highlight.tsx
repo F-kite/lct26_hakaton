@@ -5,7 +5,6 @@ interface Props {
   input: string;
 }
 
-/** Введённая часть — тёмным, остальное — приглушённым (как в макете подсказок). */
 export default function Highlight({ text, input }: Props) {
   const idx = findMatch(text, input);
   if (idx === -1) return <span className="text-neutral-950">{text}</span>;
